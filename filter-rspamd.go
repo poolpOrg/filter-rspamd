@@ -58,7 +58,7 @@ var reporters = map[string]func(string, []string) {
 	"link-connect": linkConnect,
 	"link-disconnect": linkDisconnect,
 	"link-identify": linkIdentify,
-	"link-reset": linkReset,
+	"tx-reset": txReset,
 	"tx-begin": txBegin,
 	"tx-mail": txMail,
 	"tx-rcpt": txRcpt,
@@ -100,7 +100,7 @@ func linkIdentify(sessionId string, params []string) {
 	sessions[s.id] = s
 }
 
-func linkReset(sessionId string, params []string) {
+func txReset(sessionId string, params []string) {
 	if len(params) != 0 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
