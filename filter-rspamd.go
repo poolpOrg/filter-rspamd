@@ -101,7 +101,7 @@ func linkIdentify(sessionId string, params []string) {
 }
 
 func txReset(sessionId string, params []string) {
-	if len(params) != 0 {
+	if len(params) != 1 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
@@ -258,8 +258,15 @@ func rspamdQuery(s session, token string) {
 	}
 
 	if rr.DKIMSig != "" {
-		fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
-			token, s.id, "DKIM-Signature", rr.DKIMSig)
+		for i, line := range strings.Split(rr.DKIMSig, "\n") {
+			if i == 0 {
+				fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
+					token, s.id, "DKIM-Signature", line)
+			} else {
+				fmt.Printf("filter-dataline|%s|%s|%s\n",
+					token, s.id, line)
+			}
+		}
 	}
 
 	fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
