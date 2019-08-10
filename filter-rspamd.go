@@ -310,10 +310,25 @@ func trigger(currentSlice map[string]func(string, []string), atoms []string) {
 	}
 }
 
+func skipConfig(scanner *bufio.Scanner) {
+	for {
+		if !scanner.Scan() {
+			os.Exit(0)
+		}
+		line := scanner.Text()
+		if line == "config|ready" {
+			return
+		}
+	}
+}
+
 func main() {
+	scanner := bufio.NewScanner(os.Stdin)
+
+	skipConfig(scanner)
+
 	filterInit()
 
-	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		if !scanner.Scan() {
 			os.Exit(0)
