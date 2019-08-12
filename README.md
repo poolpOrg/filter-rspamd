@@ -45,5 +45,13 @@ filter "rspamd" proc-exec "/usr/local/bin/filter-rspamd"
 listen on all filter "rspamd"
 ```
 
+A remote rspamd instance can be specified by providing the -url parameter to the filter:
+```
+filter "rspamd" proc-exec "/usr/local/bin/filter-rspamd -url http://rspamd.poolp.org:11333"
+
+listen on all filter "rspamd"
+```
+
+
 Any configuration with regard to thresholds or enabled modules must be done in rspamd itself.
 

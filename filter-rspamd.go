@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -26,6 +27,8 @@ import (
 	"net/http"
 	"encoding/json"
 )
+
+var rspamdURL *string
 
 type session struct {
 	id string
@@ -211,7 +214,7 @@ func flushMessage(s session, token string) {
 func rspamdQuery(s session, token string) {
 	r := strings.NewReader(strings.Join(s.message, "\n"))
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", "http://localhost:11333/checkv2", r)
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
 	if err != nil {
 		flushMessage(s, token)
 		return
@@ -323,6 +326,9 @@ func skipConfig(scanner *bufio.Scanner) {
 }
 
 func main() {
+	rspamdURL = flag.String("url", "http://localhost:11333", "rspamd base url")
+	flag.Parse()
+
 	scanner := bufio.NewScanner(os.Stdin)
 
 	skipConfig(scanner)
