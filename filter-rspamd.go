@@ -333,7 +333,6 @@ func main() {
 		if !scanner.Scan() {
 			os.Exit(0)
 		}
-
 		
 		atoms := strings.Split(scanner.Text(), "|")
 		if len(atoms) < 6 {
