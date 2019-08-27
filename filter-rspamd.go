@@ -38,6 +38,7 @@ type session struct {
 	src string
 	dst string
 	heloName string
+	userName string
 
 	msgid string
 	mail_from string
@@ -61,6 +62,7 @@ var reporters = map[string]func(string, []string) {
 	"link-connect": linkConnect,
 	"link-disconnect": linkDisconnect,
 	"link-identify": linkIdentify,
+	"link-auth": linkAuth,
 	"tx-reset": txReset,
 	"tx-begin": txBegin,
 	"tx-mail": txMail,
@@ -103,6 +105,18 @@ func linkIdentify(sessionId string, params []string) {
 	sessions[s.id] = s
 }
 
+func linkAuth(sessionId string, params []string) {
+	if len(params) != 2 {
+		log.Fatal("invalid input, shouldn't happen")
+	}
+	if params[1] != "pass" {
+		return
+	}
+	s := sessions[sessionId]
+	s.userName = params[0]
+	sessions[s.id] = s
+}
+
 func txReset(sessionId string, params []string) {
 	if len(params) != 1 {
 		log.Fatal("invalid input, shouldn't happen")
@@ -113,7 +127,8 @@ func txReset(sessionId string, params []string) {
 	s.mail_from = ""
 	s.rcpt_to = nil
 	s.message = nil
-	s.action  = "";	
+	s.action  = ""
+	s.userName = ""
 	sessions[s.id] = s
 }
 
@@ -231,6 +246,11 @@ func rspamdQuery(s session, token string) {
 	req.Header.Add("Helo", s.heloName)
 	req.Header.Add("Queue-Id", s.msgid)
 	req.Header.Add("From", s.mail_from)
+
+	if s.userName != "" {
+		req.Header.Add("User", s.userName)
+	}
+
 	for _, rcpt_to := range s.rcpt_to {
 		req.Header.Add("Rcpt", rcpt_to)
 	}
