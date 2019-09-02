@@ -24,7 +24,7 @@ On OpenBSD:
 ```
 $ doas pkg_add filter-rspamd
 quirks-3.167 signed on 2019-08-11T14:18:58Z
-filter-rspamd-v0.1.0: ok
+filter-rspamd-v0.1.1: ok
 $
 ```
 
@@ -47,7 +47,7 @@ listen on all filter "rspamd"
 
 A remote rspamd instance can be specified by providing the -url parameter to the filter:
 ```
-filter "rspamd" proc-exec "/usr/local/bin/filter-rspamd -url http://rspamd.poolp.org:11333"
+filter "rspamd" proc-exec "/usr/local/bin/filter-rspamd -url http://example.org:11333"
 
 listen on all filter "rspamd"
 ```
