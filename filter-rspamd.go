@@ -41,11 +41,11 @@ type session struct {
 	userName string
 
 	msgid string
-	mail_from string
-	rcpt_to []string
+	mailFrom string
+	rcptTo []string
 	message []string
 
-	action string;
+	action string
 }
 
 type rspamd struct {
@@ -124,8 +124,8 @@ func txReset(sessionId string, params []string) {
 
 	s := sessions[sessionId]
 	s.msgid = ""
-	s.mail_from = ""
-	s.rcpt_to = nil
+	s.mailFrom = ""
+	s.rcptTo = nil
 	s.message = nil
 	s.action  = ""
 	s.userName = ""
@@ -152,7 +152,7 @@ func txMail(sessionId string, params []string) {
 	}
 
 	s := sessions[sessionId]
-	s.mail_from = params[1]
+	s.mailFrom = params[1]
 	sessions[s.id] = s
 }
 
@@ -166,7 +166,7 @@ func txRcpt(sessionId string, params []string) {
 	}
 
 	s := sessions[sessionId]
-	s.rcpt_to = append(s.rcpt_to, params[1])
+	s.rcptTo = append(s.rcptTo, params[1])
 	sessions[s.id] = s
 }
 
@@ -195,7 +195,7 @@ func dataCommit(sessionId string, params []string) {
 	s := sessions[sessionId]
 	sessions[sessionId] = s
 
-	
+
 	switch s.action {
 	case "reject":
 		fmt.Printf("filter-result|%s|%s|reject|550 message rejected\n", token, sessionId)
@@ -208,7 +208,6 @@ func dataCommit(sessionId string, params []string) {
 	}
 }
 
-
 func filterInit() {
 	for k := range reporters {
 		fmt.Printf("register|report|smtp-in|%s\n", k)
@@ -216,7 +215,7 @@ func filterInit() {
 	for k := range filters {
 		fmt.Printf("register|filter|smtp-in|%s\n", k)
 	}
-	fmt.Println("register|ready")	
+	fmt.Println("register|ready")
 }
 
 func flushMessage(s session, token string) {
@@ -241,18 +240,18 @@ func rspamdQuery(s session, token string) {
 	} else {
 		req.Header.Add("Ip", "127.0.0.1")
 	}
-	
+
 	req.Header.Add("Hostname", s.rdns)
 	req.Header.Add("Helo", s.heloName)
 	req.Header.Add("Queue-Id", s.msgid)
-	req.Header.Add("From", s.mail_from)
+	req.Header.Add("From", s.mailFrom)
 
 	if s.userName != "" {
 		req.Header.Add("User", s.userName)
 	}
 
-	for _, rcpt_to := range s.rcpt_to {
-		req.Header.Add("Rcpt", rcpt_to)
+	for _, rcptTo := range s.rcptTo {
+		req.Header.Add("Rcpt", rcptTo)
 	}
 
 	resp, err := client.Do(req)
@@ -359,7 +358,7 @@ func main() {
 		if !scanner.Scan() {
 			os.Exit(0)
 		}
-		
+
 		atoms := strings.Split(scanner.Text(), "|")
 		if len(atoms) < 6 {
 			os.Exit(1)
