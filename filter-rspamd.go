@@ -54,6 +54,10 @@ type rspamd struct {
 	Subject       string
 	Action        string
 	DKIMSig       string `json:"dkim-signature"`
+	Headers       struct {
+		Add map[string]interface{} `json:"add_headers"`
+		Remove map[string]int8 `json:"remove_headers"`
+	} `json:"milter"`
 }
 
 var sessions = make(map[string]session)
@@ -171,7 +175,7 @@ func txRcpt(sessionId string, params []string) {
 }
 
 func dataLine(sessionId string, params []string) {
-	if len (params) < 2 {
+	if len(params) < 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 	token := params[0]
@@ -187,14 +191,13 @@ func dataLine(sessionId string, params []string) {
 }
 
 func dataCommit(sessionId string, params []string) {
-	if len (params) != 2 {
+	if len(params) != 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
 	token := params[0]
 	s := sessions[sessionId]
 	sessions[sessionId] = s
-
 
 	switch s.action {
 	case "reject":
@@ -223,6 +226,18 @@ func flushMessage(s session, token string) {
 		fmt.Printf("filter-dataline|%s|%s|%s\n", token, s.id, line)
 	}
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
+}
+
+func writeHeader(s session, token string, h string, t string ) {
+	for i, line := range strings.Split( t, "\n") {
+		if i == 0 {
+			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
+				token, s.id, h, line)
+		} else {
+			fmt.Printf("filter-dataline|%s|%s|%s\n",
+				token, s.id, line)
+		}
+	}
 }
 
 func rspamdQuery(s session, token string) {
@@ -280,15 +295,7 @@ func rspamdQuery(s session, token string) {
 	}
 
 	if rr.DKIMSig != "" {
-		for i, line := range strings.Split(rr.DKIMSig, "\n") {
-			if i == 0 {
-				fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
-					token, s.id, "DKIM-Signature", line)
-			} else {
-				fmt.Printf("filter-dataline|%s|%s|%s\n",
-					token, s.id, line)
-			}
-		}
+		writeHeader(s, token, "DKIM-Signature", rr.DKIMSig)
 	}
 
 	fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
@@ -303,11 +310,55 @@ func rspamdQuery(s session, token string) {
 				rr.Score, rr.RequiredScore))
 	}
 
+	if len(rr.Headers.Add) != 0 {
+		var authResults string
+
+		for h, t := range rr.Headers.Add {
+			switch v := t.(type) {
+				case map[string]interface{}:
+					if h == "Authentication-Results" {
+						v, ok := v["value"].(string)
+						if ok {
+							authResults = v
+						}
+					}
+				case string:
+				    writeHeader(s, token, h, v )
+			    default:
+			}
+		}
+
+		if authResults != "" {
+			writeHeader(s, token, "Authentication-Results", authResults)
+		}
+	}
+
 	inhdr := true
+	rmhdr := false
+
+	LOOP:
+
 	for _, line := range s.message {
 		if line == "" {
 			inhdr = false
+			rmhdr = false
 		}
+
+		if inhdr && rmhdr && strings.HasPrefix(line, "\t") {
+			continue
+		} else {
+			rmhdr = false
+		}
+
+		if inhdr && len(rr.Headers.Remove) != 0 {
+			for h := range rr.Headers.Remove {
+				if strings.HasPrefix(line, fmt.Sprintf("%s:", h ) ) {
+					rmhdr = true
+					continue LOOP
+				}
+			}
+		}
+
 		if rr.Action == "rewrite subject" && inhdr && strings.HasPrefix(line, "Subject: ") {
 			fmt.Printf("filter-dataline|%s|%s|Subject: %s\n", token, s.id, rr.Subject)
 		} else {
