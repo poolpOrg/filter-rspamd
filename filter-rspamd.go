@@ -37,6 +37,7 @@ type session struct {
 	fcrdns string
 	src string
 	dst string
+	mtaName string
 	heloName string
 	userName string
 
@@ -65,6 +66,7 @@ var sessions = make(map[string]session)
 var reporters = map[string]func(string, []string) {
 	"link-connect": linkConnect,
 	"link-disconnect": linkDisconnect,
+	"link-greeting": linkGreeting,
 	"link-identify": linkIdentify,
 	"link-auth": linkAuth,
 	"tx-reset": txReset,
@@ -97,6 +99,16 @@ func linkDisconnect(sessionId string, params []string) {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 	delete(sessions, sessionId)
+}
+
+func linkGreeting(sessionId string, params []string) {
+	if len(params) != 1 {
+		log.Fatal("invalid input, shouldn't happen")
+	}
+
+	s := sessions[sessionId]
+	s.mtaName = params[0]
+	sessions[s.id] = s
 }
 
 func linkIdentify(sessionId string, params []string) {
@@ -256,6 +268,7 @@ func rspamdQuery(s session, token string) {
 		req.Header.Add("Ip", "127.0.0.1")
 	}
 
+	req.Header.Add("MTA-Name", s.mtaName)
 	req.Header.Add("Hostname", s.rdns)
 	req.Header.Add("Helo", s.heloName)
 	req.Header.Add("Queue-Id", s.msgid)
