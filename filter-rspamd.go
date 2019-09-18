@@ -219,17 +219,17 @@ func dataCommit(sessionId string, params []string) {
 
 	switch s.action {
 	case "reject":
-		if( s.response == "") {
+		if( m == "") {
 			m = "message rejected"
 		}
 		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, sessionId, m)
 	case "greylist":
-		if( s.response == "") {
+		if( m == "") {
 			m = "try again later"
 		}
 		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, sessionId, m)
 	case "soft reject":
-		if( s.response == "") {
+		if( m == "") {
 			m = "try again later"
 		}
 		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, sessionId, m)
