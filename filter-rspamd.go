@@ -37,9 +37,9 @@ type session struct {
 	fcrdns string
 	src string
 	dst string
-	mtaName string
 	heloName string
 	userName string
+	mtaName string
 
 	msgid string
 	mail_from string
@@ -258,10 +258,10 @@ func rspamdQuery(s session, token string) {
 	} else {
 		req.Header.Add("Ip", "127.0.0.1")
 	}
-	
-	req.Header.Add("MTA-Name", s.mtaName)
+
 	req.Header.Add("Hostname", s.rdns)
 	req.Header.Add("Helo", s.heloName)
+	req.Header.Add("MTA-Name", s.mtaName)
 	req.Header.Add("Queue-Id", s.msgid)
 	req.Header.Add("From", fmt.Sprintf("<%s>", s.mail_from))
 
