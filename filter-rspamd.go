@@ -45,7 +45,8 @@ type session struct {
 	rcpt_to []string
 	message []string
 
-	action string;
+	action string
+	response string
 }
 
 type rspamd struct {
@@ -53,6 +54,9 @@ type rspamd struct {
 	RequiredScore float32 `json:"required_score"`
 	Subject       string
 	Action        string
+	Messages      struct {
+		SMTP string `json:"smtp_message"`
+	} `json:"messages"`
 	DKIMSig       string `json:"dkim-signature"`
 }
 
@@ -194,14 +198,23 @@ func dataCommit(sessionId string, params []string) {
 	s := sessions[sessionId]
 	sessions[sessionId] = s
 
-	
+
 	switch s.action {
 	case "reject":
-		fmt.Printf("filter-result|%s|%s|reject|550 message rejected\n", token, sessionId)
+		if( s.response == "") {
+			s.response = "message rejected"
+		}
+		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, sessionId, s.response)
 	case "greylist":
-		fmt.Printf("filter-result|%s|%s|reject|421 try again later\n", token, sessionId)
+		if( s.response == "") {
+			s.response = "try again later"
+		}
+		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, sessionId, s.response)
 	case "soft reject":
-		fmt.Printf("filter-result|%s|%s|reject|451 try again later\n", token, sessionId)
+		if( s.response == "") {
+			s.response = "try again later"
+		}
+		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, sessionId, s.response)
 	default:
 		fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
 	}
@@ -280,6 +293,7 @@ func rspamdQuery(s session, token string) {
 		fallthrough
 	case "soft reject":
 		s.action = rr.Action
+		s.response = rr.Messages.SMTP
 		sessions[s.id] = s
 		flushMessage(s, token)
 		return
