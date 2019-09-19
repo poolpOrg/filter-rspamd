@@ -273,7 +273,13 @@ func rspamdQuery(s session, token string) {
 
 	req.Header.Add("Pass", "All")
 	if !strings.HasPrefix(s.src, "unix:") {
-		req.Header.Add("Ip", strings.Split(s.src, ":")[0])
+		if s.src[0] == '[' {
+			ip := strings.Split(strings.Split(s.src, "]")[0], "[")[1]
+			req.Header.Add("Ip", ip)
+		} else {
+			ip := strings.Split(s.src, ":")[0]
+			req.Header.Add("Ip", ip)
+		}
 	} else {
 		req.Header.Add("Ip", "127.0.0.1")
 	}
@@ -282,7 +288,7 @@ func rspamdQuery(s session, token string) {
 	req.Header.Add("Hostname", s.rdns)
 	req.Header.Add("Helo", s.heloName)
 	req.Header.Add("Queue-Id", s.msgid)
-	req.Header.Add("From", s.mail_from)
+	req.Header.Add("From", fmt.Sprintf("<%s>", s.mail_from))
 
 	if s.userName != "" {
 		req.Header.Add("User", s.userName)
@@ -321,9 +327,6 @@ func rspamdQuery(s session, token string) {
 	if rr.DKIMSig != "" {
 		writeHeader(s, token, "DKIM-Signature", rr.DKIMSig)
 	}
-
-	fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
-		token, s.id, "X-Spam-Action", rr.Action)
 
 	if rr.Action == "add header" {
 		fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
