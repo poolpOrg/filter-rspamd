@@ -34,9 +34,7 @@ type session struct {
 	id string
 
 	rdns string
-	fcrdns string
 	src string
-	dst string
 	heloName string
 	userName string
 
@@ -82,9 +80,7 @@ func linkConnect(sessionId string, params []string) {
 	s := session{}
 	s.id = sessionId
 	s.rdns = params[0]
-	s.fcrdns = params[1]
 	s.src = params[2]
-	s.dst = params[3]
 	sessions[s.id] = s
 }
 
@@ -170,7 +166,7 @@ func txRcpt(sessionId string, params []string) {
 }
 
 func dataLine(sessionId string, params []string) {
-	if len (params) < 2 {
+	if len(params) < 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 	token := params[0]
@@ -186,7 +182,7 @@ func dataLine(sessionId string, params []string) {
 }
 
 func dataCommit(sessionId string, params []string) {
-	if len (params) != 2 {
+	if len(params) != 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
@@ -194,7 +190,7 @@ func dataCommit(sessionId string, params []string) {
 	s := sessions[sessionId]
 	sessions[sessionId] = s
 
-	
+
 	switch s.action {
 	case "reject":
 		fmt.Printf("filter-result|%s|%s|reject|550 message rejected\n", token, sessionId)
@@ -207,7 +203,6 @@ func dataCommit(sessionId string, params []string) {
 	}
 }
 
-
 func filterInit() {
 	for k := range reporters {
 		fmt.Printf("register|report|smtp-in|%s\n", k)
@@ -215,7 +210,7 @@ func filterInit() {
 	for k := range filters {
 		fmt.Printf("register|filter|smtp-in|%s\n", k)
 	}
-	fmt.Println("register|ready")	
+	fmt.Println("register|ready")
 }
 
 func flushMessage(s session, token string) {
@@ -246,7 +241,7 @@ func rspamdQuery(s session, token string) {
 	} else {
 		req.Header.Add("Ip", "127.0.0.1")
 	}
-	
+
 	req.Header.Add("Hostname", s.rdns)
 	req.Header.Add("Helo", s.heloName)
 	req.Header.Add("Queue-Id", s.msgid)
@@ -361,7 +356,7 @@ func main() {
 		if !scanner.Scan() {
 			os.Exit(0)
 		}
-		
+
 		atoms := strings.Split(scanner.Text(), "|")
 		if len(atoms) < 6 {
 			os.Exit(1)
