@@ -250,7 +250,7 @@ func rspamdQuery(s session, token string) {
 	req.Header.Add("Hostname", s.rdns)
 	req.Header.Add("Helo", s.heloName)
 	req.Header.Add("Queue-Id", s.msgid)
-	req.Header.Add("From", s.mail_from)
+	req.Header.Add("From", fmt.Sprintf("<%s>", s.mail_from))
 
 	if s.userName != "" {
 		req.Header.Add("User", s.userName)
