@@ -297,9 +297,6 @@ func rspamdQuery(s session, token string) {
 		}
 	}
 
-	fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
-		token, s.id, "X-Spam-Action", rr.Action)
-
 	if rr.Action == "add header" {
 		fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
 			token, s.id, "X-Spam", "yes")
