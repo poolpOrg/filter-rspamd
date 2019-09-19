@@ -40,8 +40,8 @@ type session struct {
 	userName string
 
 	msgid string
-	mailFrom string
-	rcptTo []string
+	mail_from string
+	rcpt_to []string
 	message []string
 
 	action string
@@ -140,8 +140,8 @@ func txReset(sessionId string, params []string) {
 
 	s := sessions[sessionId]
 	s.msgid = ""
-	s.mailFrom = ""
-	s.rcptTo = nil
+	s.mail_from = ""
+	s.rcpt_to = nil
 	s.message = nil
 	s.action  = ""
 	sessions[s.id] = s
@@ -167,7 +167,7 @@ func txMail(sessionId string, params []string) {
 	}
 
 	s := sessions[sessionId]
-	s.mailFrom = params[1]
+	s.mail_from = params[1]
 	sessions[s.id] = s
 }
 
@@ -181,7 +181,7 @@ func txRcpt(sessionId string, params []string) {
 	}
 
 	s := sessions[sessionId]
-	s.rcptTo = append(s.rcptTo, params[1])
+	s.rcpt_to = append(s.rcpt_to, params[1])
 	sessions[s.id] = s
 }
 
@@ -282,14 +282,14 @@ func rspamdQuery(s session, token string) {
 	req.Header.Add("Hostname", s.rdns)
 	req.Header.Add("Helo", s.heloName)
 	req.Header.Add("Queue-Id", s.msgid)
-	req.Header.Add("From", s.mailFrom)
+	req.Header.Add("From", s.mail_from)
 
 	if s.userName != "" {
 		req.Header.Add("User", s.userName)
 	}
 
-	for _, rcptTo := range s.rcptTo {
-		req.Header.Add("Rcpt", rcptTo)
+	for _, rcpt_to := range s.rcpt_to {
+		req.Header.Add("Rcpt", rcpt_to)
 	}
 
 	resp, err := client.Do(req)
