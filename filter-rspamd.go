@@ -236,7 +236,13 @@ func rspamdQuery(s session, token string) {
 
 	req.Header.Add("Pass", "All")
 	if !strings.HasPrefix(s.src, "unix:") {
-		req.Header.Add("Ip", strings.Split(s.src, ":")[0])
+		if s.src[0] == '[' {
+			ip := strings.Split(strings.Split(s.src, "]")[0], "[")[1]
+			req.Header.Add("Ip", ip)
+		} else {
+			ip := strings.Split(s.src, ":")[0]
+			req.Header.Add("Ip", ip)
+		}
 	} else {
 		req.Header.Add("Ip", "127.0.0.1")
 	}
