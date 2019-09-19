@@ -34,9 +34,7 @@ type session struct {
 	id string
 
 	rdns string
-	fcrdns string
 	src string
-	dst string
 	mtaName string
 	heloName string
 	userName string
@@ -92,9 +90,7 @@ func linkConnect(sessionId string, params []string) {
 	s := session{}
 	s.id = sessionId
 	s.rdns = params[0]
-	s.fcrdns = params[1]
 	s.src = params[2]
-	s.dst = params[3]
 	sessions[s.id] = s
 }
 
