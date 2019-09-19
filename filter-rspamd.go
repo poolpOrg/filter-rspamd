@@ -148,7 +148,6 @@ func txReset(sessionId string, params []string) {
 	s.rcptTo = nil
 	s.message = nil
 	s.action  = ""
-	s.userName = ""
 	sessions[s.id] = s
 }
 
