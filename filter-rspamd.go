@@ -245,6 +245,18 @@ func flushMessage(s session, token string) {
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
 }
 
+func writeHeader(s session, token string, h string, t string ) {
+	for i, line := range strings.Split( t, "\n") {
+		if i == 0 {
+			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
+				token, s.id, h, line)
+		} else {
+			fmt.Printf("filter-dataline|%s|%s|%s\n",
+				token, s.id, line)
+		}
+	}
+}
+
 func rspamdQuery(s session, token string) {
 	r := strings.NewReader(strings.Join(s.message, "\n"))
 	client := &http.Client{}
@@ -308,15 +320,7 @@ func rspamdQuery(s session, token string) {
 	}
 
 	if rr.DKIMSig != "" {
-		for i, line := range strings.Split(rr.DKIMSig, "\n") {
-			if i == 0 {
-				fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
-					token, s.id, "DKIM-Signature", line)
-			} else {
-				fmt.Printf("filter-dataline|%s|%s|%s\n",
-					token, s.id, line)
-			}
-		}
+		writeHeader(s, token, "DKIM-Signature", rr.DKIMSig)
 	}
 
 	if rr.Action == "add header" {
