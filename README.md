@@ -11,6 +11,7 @@ The filter currently supports:
 - adding X-Spam related headers to a message
 - rewriting Subject
 - DKIM-signing message
+- Rspamd-provided SMTP replies
 
 ## Dependencies
 The filter is written in Golang and doesn't have any dependencies beyond standard library.
