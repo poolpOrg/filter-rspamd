@@ -57,6 +57,9 @@ type rspamd struct {
 		SMTP string `json:"smtp_message"`
 	} `json:"messages"`
 	DKIMSig       string `json:"dkim-signature"`
+	Headers       struct {
+		Remove map[string]int8 `json:"remove_headers"`
+	} `json:"milter"`
 }
 
 var sessions = make(map[string]session)
@@ -332,9 +335,31 @@ func rspamdQuery(s session, token string) {
 	}
 
 	inhdr := true
+	rmhdr := false
+
+	LOOP:
+
 	for _, line := range s.message {
 		if line == "" {
 			inhdr = false
+			rmhdr = false
+		}
+
+		if inhdr && rmhdr && (
+			strings.HasPrefix(line, "\t") ||
+			strings.HasPrefix(line, " ") ) {
+			continue
+		} else {
+			rmhdr = false
+		}
+
+		if inhdr && len(rr.Headers.Remove) > 0 {
+			for h := range rr.Headers.Remove {
+				if strings.HasPrefix(line, fmt.Sprintf("%s:", h) ) {
+					rmhdr = true
+					continue LOOP
+				}
+			}
 		}
 		if rr.Action == "rewrite subject" && inhdr && strings.HasPrefix(line, "Subject: ") {
 			fmt.Printf("filter-dataline|%s|%s|Subject: %s\n", token, s.id, rr.Subject)
