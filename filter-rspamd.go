@@ -139,7 +139,8 @@ func txReset(sessionId string, params []string) {
 	s.mailFrom = ""
 	s.rcptTo = nil
 	s.message = nil
-	s.action  = ""
+	s.action = ""
+	s.response = ""
 	sessions[s.id] = s
 }
 
