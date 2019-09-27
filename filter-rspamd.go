@@ -59,7 +59,7 @@ type rspamd struct {
 	DKIMSig       string `json:"dkim-signature"`
 }
 
-var sessions = make(map[string]session)
+var sessions = make(map[string]*session)
 
 var reporters = map[string]func(string, []string) {
 	"link-connect": linkConnect,
@@ -87,7 +87,7 @@ func linkConnect(sessionId string, params []string) {
 	s.id = sessionId
 	s.rdns = params[0]
 	s.src = params[2]
-	sessions[s.id] = s
+	sessions[s.id] = &s
 }
 
 func linkDisconnect(sessionId string, params []string) {
@@ -104,7 +104,6 @@ func linkGreeting(sessionId string, params []string) {
 
 	s := sessions[sessionId]
 	s.mtaName = params[0]
-	sessions[s.id] = s
 }
 
 func linkIdentify(sessionId string, params []string) {
@@ -114,7 +113,6 @@ func linkIdentify(sessionId string, params []string) {
 
 	s := sessions[sessionId]
 	s.heloName = params[1]
-	sessions[s.id] = s
 }
 
 func linkAuth(sessionId string, params []string) {
@@ -126,7 +124,6 @@ func linkAuth(sessionId string, params []string) {
 	}
 	s := sessions[sessionId]
 	s.userName = params[0]
-	sessions[s.id] = s
 }
 
 func txReset(sessionId string, params []string) {
@@ -141,7 +138,6 @@ func txReset(sessionId string, params []string) {
 	s.message = nil
 	s.action = ""
 	s.response = ""
-	sessions[s.id] = s
 }
 
 func txBegin(sessionId string, params []string) {
@@ -151,7 +147,6 @@ func txBegin(sessionId string, params []string) {
 
 	s := sessions[sessionId]
 	s.msgid = params[0]
-	sessions[s.id] = s
 }
 
 func txMail(sessionId string, params []string) {
@@ -165,7 +160,6 @@ func txMail(sessionId string, params []string) {
 
 	s := sessions[sessionId]
 	s.mailFrom = params[1]
-	sessions[s.id] = s
 }
 
 func txRcpt(sessionId string, params []string) {
@@ -179,7 +173,6 @@ func txRcpt(sessionId string, params []string) {
 
 	s := sessions[sessionId]
 	s.rcptTo = append(s.rcptTo, params[1])
-	sessions[s.id] = s
 }
 
 func dataLine(sessionId string, params []string) {
@@ -195,7 +188,6 @@ func dataLine(sessionId string, params []string) {
 		return
 	}
 	s.message = append(s.message, line)
-	sessions[sessionId] = s
 }
 
 func dataCommit(sessionId string, params []string) {
@@ -205,7 +197,6 @@ func dataCommit(sessionId string, params []string) {
 
 	token := params[0]
 	s := sessions[sessionId]
-	sessions[sessionId] = s
 
 	switch s.action {
 	case "reject":
@@ -238,14 +229,14 @@ func filterInit() {
 	fmt.Println("register|ready")
 }
 
-func flushMessage(s session, token string) {
+func flushMessage(s *session, token string) {
 	for _, line := range s.message {
 		fmt.Printf("filter-dataline|%s|%s|%s\n", token, s.id, line)
 	}
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
 }
 
-func writeHeader(s session, token string, h string, t string ) {
+func writeHeader(s *session, token string, h string, t string ) {
 	for i, line := range strings.Split( t, "\n") {
 		if i == 0 {
 			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
@@ -257,7 +248,7 @@ func writeHeader(s session, token string, h string, t string ) {
 	}
 }
 
-func rspamdQuery(s session, token string) {
+func rspamdQuery(s *session, token string) {
 	r := strings.NewReader(strings.Join(s.message, "\n"))
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
@@ -314,7 +305,6 @@ func rspamdQuery(s session, token string) {
 	case "soft reject":
 		s.action = rr.Action
 		s.response = rr.Messages.SMTP
-		sessions[s.id] = s
 		flushMessage(s, token)
 		return
 	}
@@ -344,7 +334,6 @@ func rspamdQuery(s session, token string) {
 		}
 	}
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
-	sessions[s.id] = s
 }
 
 func trigger(currentSlice map[string]func(string, []string), atoms []string) {
