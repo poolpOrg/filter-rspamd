@@ -347,16 +347,10 @@ func rspamdQuery(s session, token string) {
 	sessions[s.id] = s
 }
 
-func trigger(currentSlice map[string]func(string, []string), atoms []string) {
-	found := false
-	for k, v := range currentSlice {
-		if k == atoms[4] {
-			v(atoms[5], atoms[6:])
-			found = true
-			break
-		}
-	}
-	if !found {
+func trigger(actions map[string]func(string, []string), atoms []string) {
+	if v, ok := actions[atoms[4]]; ok {
+		v(atoms[5], atoms[6:])
+	} else {
 		os.Exit(1)
 	}
 }
