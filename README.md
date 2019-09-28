@@ -33,7 +33,7 @@ Alternatively, clone the repository, build and install the filter:
 ```
 $ cd filter-rspamd/
 $ go build
-$ doas install -m 0555 filter-rspamd /usr/local/bin/filter-rspamd
+$ doas install -m 0555 filter-rspamd /usr/local/libexec/smtpd/filter-rspamd
 ```
 
 ## How to configure
@@ -41,14 +41,14 @@ The filter itself requires no configuration.
 
 It must be declared in smtpd.conf and attached to a listener for sessions to go through rspamd:
 ```
-filter "rspamd" proc-exec "/usr/local/bin/filter-rspamd"
+filter "rspamd" proc-exec "filter-rspamd"
 
 listen on all filter "rspamd"
 ```
 
 A remote rspamd instance can be specified by providing the -url parameter to the filter:
 ```
-filter "rspamd" proc-exec "/usr/local/bin/filter-rspamd -url http://example.org:11333"
+filter "rspamd" proc-exec "filter-rspamd -url http://example.org:11333"
 
 listen on all filter "rspamd"
 ```
