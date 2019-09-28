@@ -4,6 +4,7 @@
 This filter implements the Rspamd protocol and allows OpenSMTPD to request an Rspamd analysis
 of an SMTP transaction before a message is committed to queue.
 
+
 ## Features
 The filter currently supports:
 
@@ -12,6 +13,8 @@ The filter currently supports:
 - rewriting Subject
 - DKIM-signing message
 - Rspamd-provided SMTP replies
+- Allow Rspamd to add and remove headers
+
 
 ## Dependencies
 The filter is written in Golang and doesn't have any dependencies beyond standard library.
@@ -36,6 +39,7 @@ $ go build
 $ doas install -m 0555 filter-rspamd /usr/local/libexec/smtpd/filter-rspamd
 ```
 
+
 ## How to configure
 The filter itself requires no configuration.
 
@@ -55,4 +59,3 @@ listen on all filter "rspamd"
 
 
 Any configuration with regard to thresholds or enabled modules must be done in rspamd itself.
-
