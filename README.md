@@ -26,9 +26,9 @@ It requires OpenSMTPD 6.6.0 or higher.
 Install from your operating system's preferred package manager if available.
 On OpenBSD:
 ```
-$ doas pkg_add filter-rspamd
+$ doas pkg_add opensmtpd-filter-rspamd
 quirks-3.167 signed on 2019-08-11T14:18:58Z
-filter-rspamd-v0.1.2: ok
+opensmtpd-filter-rspamd-0.1.3: ok
 $
 ```
 
