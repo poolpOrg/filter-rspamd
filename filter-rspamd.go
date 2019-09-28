@@ -57,6 +57,7 @@ type rspamd struct {
 		SMTP string `json:"smtp_message"`
 	} `json:"messages"`
 	DKIMSig       string `json:"dkim-signature"`
+	Symbols	      map[string]interface{} `json:"symbols"`
 }
 
 var sessions = make(map[string]session)
@@ -298,6 +299,7 @@ func rspamdQuery(s session, token string) {
 		flushMessage(s, token)
 		return
 	}
+
 	defer resp.Body.Close()
 
 	rr := &rspamd{}
@@ -330,6 +332,18 @@ func rspamdQuery(s session, token string) {
 			token, s.id, "X-Spam-Score",
 			fmt.Sprintf("%v / %v",
 				rr.Score, rr.RequiredScore))
+
+		if len(rr.Symbols) != 0 {
+			buf := ""
+			for k, _ := range rr.Symbols {
+				if buf == "" {
+					buf = fmt.Sprintf("%s%s", buf, k)
+				} else {
+					buf = fmt.Sprintf("%s,\n %s", buf, k)
+				}
+			}
+			writeHeader(s, token, "X-Spam-Symbols", buf)
+		}
 	}
 
 	inhdr := true
