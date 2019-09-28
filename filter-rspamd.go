@@ -60,11 +60,12 @@ type rspamd struct {
 	Headers       struct {
 		Add map[string]interface{} `json:"add_headers"`
 	} `json:"milter"`
+	Symbols	      map[string]interface{} `json:"symbols"`
 }
 
-var sessions = make(map[string]session)
+var sessions = make(map[string]*session)
 
-var reporters = map[string]func(string, []string) {
+var reporters = map[string]func(*session, []string) {
 	"link-connect": linkConnect,
 	"link-disconnect": linkDisconnect,
 	"link-greeting": linkGreeting,
@@ -76,87 +77,76 @@ var reporters = map[string]func(string, []string) {
 	"tx-rcpt": txRcpt,
 }
 
-var filters = map[string]func(string, []string) {
+var filters = map[string]func(*session, []string) {
 	"data-line": dataLine,
 	"commit": dataCommit,
 }
 
-func linkConnect(sessionId string, params []string) {
+func linkConnect(s *session, params []string) {
 	if len(params) != 4 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := session{}
-	s.id = sessionId
 	s.rdns = params[0]
 	s.src = params[2]
-	sessions[s.id] = s
 }
 
-func linkDisconnect(sessionId string, params []string) {
+func linkDisconnect(s *session, params []string) {
 	if len(params) != 0 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
-	delete(sessions, sessionId)
+	delete(sessions, s.id)
 }
 
-func linkGreeting(sessionId string, params []string) {
+func linkGreeting(s *session, params []string) {
 	if len(params) != 1 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := sessions[sessionId]
 	s.mtaName = params[0]
-	sessions[s.id] = s
 }
 
-func linkIdentify(sessionId string, params []string) {
+func linkIdentify(s *session, params []string) {
 	if len(params) != 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := sessions[sessionId]
 	s.heloName = params[1]
-	sessions[s.id] = s
 }
 
-func linkAuth(sessionId string, params []string) {
+func linkAuth(s *session, params []string) {
 	if len(params) != 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 	if params[1] != "pass" {
 		return
 	}
-	s := sessions[sessionId]
+
 	s.userName = params[0]
-	sessions[s.id] = s
 }
 
-func txReset(sessionId string, params []string) {
+func txReset(s *session, params []string) {
 	if len(params) != 1 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := sessions[sessionId]
 	s.msgid = ""
 	s.mailFrom = ""
 	s.rcptTo = nil
 	s.message = nil
-	s.action  = ""
-	sessions[s.id] = s
+	s.action = ""
+	s.response = ""
 }
 
-func txBegin(sessionId string, params []string) {
+func txBegin(s *session, params []string) {
 	if len(params) != 1 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := sessions[sessionId]
 	s.msgid = params[0]
-	sessions[s.id] = s
 }
 
-func txMail(sessionId string, params []string) {
+func txMail(s *session, params []string) {
 	if len(params) != 3 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
@@ -165,12 +155,10 @@ func txMail(sessionId string, params []string) {
 		return
 	}
 
-	s := sessions[sessionId]
 	s.mailFrom = params[1]
-	sessions[s.id] = s
 }
 
-func txRcpt(sessionId string, params []string) {
+func txRcpt(s *session, params []string) {
 	if len(params) != 3 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
@@ -179,54 +167,48 @@ func txRcpt(sessionId string, params []string) {
 		return
 	}
 
-	s := sessions[sessionId]
 	s.rcptTo = append(s.rcptTo, params[1])
-	sessions[s.id] = s
 }
 
-func dataLine(sessionId string, params []string) {
+func dataLine(s *session, params []string) {
 	if len(params) < 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 	token := params[0]
 	line := strings.Join(params[1:], "|")
 
-	s := sessions[sessionId]
 	if line == "." {
 		go rspamdQuery(s, token)
 		return
 	}
 	s.message = append(s.message, line)
-	sessions[sessionId] = s
 }
 
-func dataCommit(sessionId string, params []string) {
+func dataCommit(s *session, params []string) {
 	if len(params) != 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
 	token := params[0]
-	s := sessions[sessionId]
-	sessions[sessionId] = s
 
 	switch s.action {
 	case "reject":
 		if( s.response == "") {
 			s.response = "message rejected"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, sessionId, s.response)
+		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, s.id, s.response)
 	case "greylist":
 		if( s.response == "") {
 			s.response = "try again later"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, sessionId, s.response)
+		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.response)
 	case "soft reject":
 		if( s.response == "") {
 			s.response = "try again later"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, sessionId, s.response)
+		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, s.id, s.response)
 	default:
-		fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
+		fmt.Printf("filter-result|%s|%s|proceed\n", token, s.id)
 	}
 }
 
@@ -240,14 +222,14 @@ func filterInit() {
 	fmt.Println("register|ready")
 }
 
-func flushMessage(s session, token string) {
+func flushMessage(s *session, token string) {
 	for _, line := range s.message {
 		fmt.Printf("filter-dataline|%s|%s|%s\n", token, s.id, line)
 	}
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
 }
 
-func writeHeader(s session, token string, h string, t string ) {
+func writeHeader(s *session, token string, h string, t string ) {
 	for i, line := range strings.Split( t, "\n") {
 		if i == 0 {
 			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
@@ -259,7 +241,7 @@ func writeHeader(s session, token string, h string, t string ) {
 	}
 }
 
-func rspamdQuery(s session, token string) {
+func rspamdQuery(s *session, token string) {
 	r := strings.NewReader(strings.Join(s.message, "\n"))
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
@@ -300,6 +282,7 @@ func rspamdQuery(s session, token string) {
 		flushMessage(s, token)
 		return
 	}
+
 	defer resp.Body.Close()
 
 	rr := &rspamd{}
@@ -316,7 +299,6 @@ func rspamdQuery(s session, token string) {
 	case "soft reject":
 		s.action = rr.Action
 		s.response = rr.Messages.SMTP
-		sessions[s.id] = s
 		flushMessage(s, token)
 		return
 	}
@@ -332,6 +314,18 @@ func rspamdQuery(s session, token string) {
 			token, s.id, "X-Spam-Score",
 			fmt.Sprintf("%v / %v",
 				rr.Score, rr.RequiredScore))
+
+		if len(rr.Symbols) != 0 {
+			buf := ""
+			for k, _ := range rr.Symbols {
+				if buf == "" {
+					buf = fmt.Sprintf("%s%s", buf, k)
+				} else {
+					buf = fmt.Sprintf("%s,\n %s", buf, k)
+				}
+			}
+			writeHeader(s, token, "X-Spam-Symbols", buf)
+		}
 	}
 
 	if len(rr.Headers.Add) > 0 {
@@ -393,19 +387,20 @@ func rspamdQuery(s session, token string) {
 		}
 	}
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
-	sessions[s.id] = s
 }
 
-func trigger(currentSlice map[string]func(string, []string), atoms []string) {
-	found := false
-	for k, v := range currentSlice {
-		if k == atoms[4] {
-			v(atoms[5], atoms[6:])
-			found = true
-			break
-		}
+func trigger(actions map[string]func(*session, []string), atoms []string) {
+	if atoms[4] == "link-connect" {
+		// special case to simplify subsequent code
+		s := session{}
+		s.id = atoms[5]
+		sessions[s.id] = &s
 	}
-	if !found {
+
+	s := sessions[atoms[5]]	
+	if v, ok := actions[atoms[4]]; ok {
+		v(s, atoms[6:])
+	} else {
 		os.Exit(1)
 	}
 }
