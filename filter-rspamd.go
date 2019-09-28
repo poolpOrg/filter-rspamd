@@ -23,9 +23,9 @@ import (
 	"os"
 	"strings"
 
+	"encoding/json"
 	"log"
 	"net/http"
-	"encoding/json"
 )
 
 var rspamdURL *string
@@ -33,18 +33,18 @@ var rspamdURL *string
 type session struct {
 	id string
 
-	rdns string
-	src string
+	rdns     string
+	src      string
 	heloName string
 	userName string
-	mtaName string
+	mtaName  string
 
-	msgid string
+	msgid    string
 	mailFrom string
-	rcptTo []string
-	message []string
+	rcptTo   []string
+	message  []string
 
-	action string
+	action   string
 	response string
 }
 
@@ -56,31 +56,31 @@ type rspamd struct {
 	Messages      struct {
 		SMTP string `json:"smtp_message"`
 	} `json:"messages"`
-	DKIMSig       string `json:"dkim-signature"`
-	Headers       struct {
-		Remove map[string]int8 `json:"remove_headers"`
-		Add map[string]interface{} `json:"add_headers"`
+	DKIMSig string `json:"dkim-signature"`
+	Headers struct {
+		Remove map[string]int8        `json:"remove_headers"`
+		Add    map[string]interface{} `json:"add_headers"`
 	} `json:"milter"`
-	Symbols	      map[string]interface{} `json:"symbols"`
+	Symbols map[string]interface{} `json:"symbols"`
 }
 
 var sessions = make(map[string]*session)
 
-var reporters = map[string]func(*session, []string) {
-	"link-connect": linkConnect,
+var reporters = map[string]func(*session, []string){
+	"link-connect":    linkConnect,
 	"link-disconnect": linkDisconnect,
-	"link-greeting": linkGreeting,
-	"link-identify": linkIdentify,
-	"link-auth": linkAuth,
-	"tx-reset": txReset,
-	"tx-begin": txBegin,
-	"tx-mail": txMail,
-	"tx-rcpt": txRcpt,
+	"link-greeting":   linkGreeting,
+	"link-identify":   linkIdentify,
+	"link-auth":       linkAuth,
+	"tx-reset":        txReset,
+	"tx-begin":        txBegin,
+	"tx-mail":         txMail,
+	"tx-rcpt":         txRcpt,
 }
 
-var filters = map[string]func(*session, []string) {
+var filters = map[string]func(*session, []string){
 	"data-line": dataLine,
-	"commit": dataCommit,
+	"commit":    dataCommit,
 }
 
 func linkConnect(s *session, params []string) {
@@ -194,17 +194,17 @@ func dataCommit(s *session, params []string) {
 
 	switch s.action {
 	case "reject":
-		if( s.response == "") {
+		if s.response == "" {
 			s.response = "message rejected"
 		}
 		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, s.id, s.response)
 	case "greylist":
-		if( s.response == "") {
+		if s.response == "" {
 			s.response = "try again later"
 		}
 		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.response)
 	case "soft reject":
-		if( s.response == "") {
+		if s.response == "" {
 			s.response = "try again later"
 		}
 		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, s.id, s.response)
@@ -230,8 +230,8 @@ func flushMessage(s *session, token string) {
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
 }
 
-func writeHeader(s *session, token string, h string, t string ) {
-	for i, line := range strings.Split( t, "\n") {
+func writeHeader(s *session, token string, h string, t string) {
+	for i, line := range strings.Split(t, "\n") {
 		if i == 0 {
 			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
 				token, s.id, h, line)
@@ -334,27 +334,27 @@ func rspamdQuery(s *session, token string) {
 
 		for h, t := range rr.Headers.Add {
 			switch v := t.(type) {
-				/**
-				 * Authentication headers from Rspamd are in the form of:
-				 * ARC-Seal : { order : 1, value : text }
-				 * ARC-Message-Signature : { order : 1, value : text }
-				 * Unfortunately they all have an order of 1, so we
-				 * make a map of them and print them in proper order.
-				 */
-				case map[string]interface{}:
-					if h != "" {
-						v, ok := v["value"].(string)
-						if ok {
-							authHeaders[h] = v
-						}
+			/**
+			 * Authentication headers from Rspamd are in the form of:
+			 * ARC-Seal : { order : 1, value : text }
+			 * ARC-Message-Signature : { order : 1, value : text }
+			 * Unfortunately they all have an order of 1, so we
+			 * make a map of them and print them in proper order.
+			 */
+			case map[string]interface{}:
+				if h != "" {
+					v, ok := v["value"].(string)
+					if ok {
+						authHeaders[h] = v
 					}
-				/**
-				 * Regular X-Spam headers from Rspamd are plain strings.
-				 * Insert these at the top.
-				 */
-				case string:
-				    writeHeader(s, token, h, v)
-			    default:
+				}
+			/**
+			 * Regular X-Spam headers from Rspamd are plain strings.
+			 * Insert these at the top.
+			 */
+			case string:
+				writeHeader(s, token, h, v)
+			default:
 			}
 		}
 
@@ -369,7 +369,7 @@ func rspamdQuery(s *session, token string) {
 				"Authentication-Results"}
 
 			for _, h := range hdrs {
-				if( authHeaders[h] != "") {
+				if authHeaders[h] != "" {
 					writeHeader(s, token, h, authHeaders[h])
 				}
 			}
@@ -379,7 +379,7 @@ func rspamdQuery(s *session, token string) {
 	inhdr := true
 	rmhdr := false
 
-	LOOP:
+LOOP:
 
 	for _, line := range s.message {
 		if line == "" {
@@ -387,9 +387,8 @@ func rspamdQuery(s *session, token string) {
 			rmhdr = false
 		}
 
-		if inhdr && rmhdr && (
-			strings.HasPrefix(line, "\t") ||
-			strings.HasPrefix(line, " ") ) {
+		if inhdr && rmhdr && (strings.HasPrefix(line, "\t") ||
+			strings.HasPrefix(line, " ")) {
 			continue
 		} else {
 			rmhdr = false
@@ -397,7 +396,7 @@ func rspamdQuery(s *session, token string) {
 
 		if inhdr && len(rr.Headers.Remove) > 0 {
 			for h := range rr.Headers.Remove {
-				if strings.HasPrefix(line, fmt.Sprintf("%s:", h) ) {
+				if strings.HasPrefix(line, fmt.Sprintf("%s:", h)) {
 					rmhdr = true
 					continue LOOP
 				}
@@ -420,7 +419,7 @@ func trigger(actions map[string]func(*session, []string), atoms []string) {
 		sessions[s.id] = &s
 	}
 
-	s := sessions[atoms[5]]	
+	s := sessions[atoms[5]]
 	if v, ok := actions[atoms[4]]; ok {
 		v(s, atoms[6:])
 	} else {
