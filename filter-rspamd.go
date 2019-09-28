@@ -29,6 +29,7 @@ import (
 )
 
 var rspamdURL *string
+var symbolFormat *string
 
 type session struct {
 	id string
@@ -61,7 +62,10 @@ type rspamd struct {
 		Remove map[string]int8        `json:"remove_headers"`
 		Add    map[string]interface{} `json:"add_headers"`
 	} `json:"milter"`
-	Symbols map[string]interface{} `json:"symbols"`
+	Symbols map[string]struct{
+		Score   float32
+		Matches []string `json:"options"`
+	} `json:"symbols"`
 }
 
 var sessions = make(map[string]*session)
@@ -242,6 +246,72 @@ func writeHeader(s *session, token string, h string, t string) {
 	}
 }
 
+func writeXSpamSymbols(s *session, token string, rr *rspamd ) {
+	if len(rr.Symbols) != 0 {
+		pre  := "X-Spam-Symbols: "
+		line := 0
+
+		if *symbolFormat == "brief" {
+			buf := &strings.Builder{}
+			max := 76
+			i   := 0
+
+			buf.WriteString(pre)
+
+			pre = ""
+
+			for k, v := range rr.Symbols {
+				sym := fmt.Sprintf("%s=%.2f", k, v.Score)
+
+				if i > 0 && buf.Len() > 0 && len(sym) + buf.Len() > max {
+					fmt.Printf("filter-dataline|%s|%s|%s%s\n",
+						token, s.id, pre, buf.String())
+					buf.Reset()
+
+					if line == 0 {
+						pre = "\t"
+						max = 68
+					}
+
+					line++
+				}
+
+				if i > 0 && buf.Len() > 0 {
+					buf.WriteString(", ")
+				}
+
+				i++
+
+				buf.WriteString(sym)
+			}
+
+			if( buf.Len() > 0 ) {
+				fmt.Printf("filter-dataline|%s|%s|%s%s\n",
+					token, s.id, pre, buf.String())
+				buf.Reset()
+			}
+		} else {
+			for k, v := range rr.Symbols {
+				matches := ""
+
+				if len(v.Matches) > 0 {
+					matches = fmt.Sprintf("[%s]",
+						strings.Join(v.Matches, ","))
+				}
+
+				fmt.Printf("filter-dataline|%s|%s|%s%s(%.2f)%s\n",
+					token, s.id, pre, k, v.Score, matches)
+
+				if line == 0 {
+					pre = "\t"
+				}
+
+				line++
+			}
+		}
+	}
+}
+
 func rspamdQuery(s *session, token string) {
 	r := strings.NewReader(strings.Join(s.message, "\n"))
 	client := &http.Client{}
@@ -317,15 +387,7 @@ func rspamdQuery(s *session, token string) {
 				rr.Score, rr.RequiredScore))
 
 		if len(rr.Symbols) != 0 {
-			buf := ""
-			for k, _ := range rr.Symbols {
-				if buf == "" {
-					buf = fmt.Sprintf("%s%s", buf, k)
-				} else {
-					buf = fmt.Sprintf("%s,\n %s", buf, k)
-				}
-			}
-			writeHeader(s, token, "X-Spam-Symbols", buf)
+			writeXSpamSymbols(s, token, rr)
 		}
 	}
 
@@ -441,7 +503,15 @@ func skipConfig(scanner *bufio.Scanner) {
 
 func main() {
 	rspamdURL = flag.String("url", "http://localhost:11333", "rspamd base url")
+	symbolFormat = flag.String("symbols", "brief", "X-Spam-Symbols header format [brief, full]")
 	flag.Parse()
+
+	switch *symbolFormat {
+	case "brief":
+	case "full":
+	default:
+		fmt.Fprintln(os.Stderr, "Invalid X-Spam-Symbols header format - using brief mode.")
+	}
 
 	scanner := bufio.NewScanner(os.Stdin)
 
