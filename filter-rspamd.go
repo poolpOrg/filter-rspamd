@@ -57,6 +57,9 @@ type rspamd struct {
 		SMTP string `json:"smtp_message"`
 	} `json:"messages"`
 	DKIMSig       string `json:"dkim-signature"`
+	Headers       struct {
+		Add map[string]interface{} `json:"add_headers"`
+	} `json:"milter"`
 	Symbols	      map[string]interface{} `json:"symbols"`
 }
 
@@ -322,6 +325,53 @@ func rspamdQuery(s *session, token string) {
 				}
 			}
 			writeHeader(s, token, "X-Spam-Symbols", buf)
+		}
+	}
+
+	if len(rr.Headers.Add) > 0 {
+		authHeaders := map[string]string{}
+
+		for h, t := range rr.Headers.Add {
+			switch v := t.(type) {
+				/**
+				 * Authentication headers from Rspamd are in the form of:
+				 * ARC-Seal : { order : 1, value : text }
+				 * ARC-Message-Signature : { order : 1, value : text }
+				 * Unfortunately they all have an order of 1, so we
+				 * make a map of them and print them in proper order.
+				 */
+				case map[string]interface{}:
+					if h != "" {
+						v, ok := v["value"].(string)
+						if ok {
+							authHeaders[h] = v
+						}
+					}
+				/**
+				 * Regular X-Spam headers from Rspamd are plain strings.
+				 * Insert these at the top.
+				 */
+				case string:
+				    writeHeader(s, token, h, v)
+			    default:
+			}
+		}
+
+		/**
+		 * Prefix auth headers to incoming mail in proper order.
+		 */
+		if len(authHeaders) > 0 {
+			hdrs := []string{
+				"ARC-Seal",
+				"ARC-Message-Signature",
+				"ARC-Authentication-Results",
+				"Authentication-Results"}
+
+			for _, h := range hdrs {
+				if( authHeaders[h] != "") {
+					writeHeader(s, token, h, authHeaders[h])
+				}
+			}
 		}
 	}
 
