@@ -61,7 +61,7 @@ type rspamd struct {
 
 var sessions = make(map[string]*session)
 
-var reporters = map[string]func(string, []string) {
+var reporters = map[string]func(*session, []string) {
 	"link-connect": linkConnect,
 	"link-disconnect": linkDisconnect,
 	"link-greeting": linkGreeting,
@@ -73,65 +73,59 @@ var reporters = map[string]func(string, []string) {
 	"tx-rcpt": txRcpt,
 }
 
-var filters = map[string]func(string, []string) {
+var filters = map[string]func(*session, []string) {
 	"data-line": dataLine,
 	"commit": dataCommit,
 }
 
-func linkConnect(sessionId string, params []string) {
+func linkConnect(s *session, params []string) {
 	if len(params) != 4 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := session{}
-	s.id = sessionId
 	s.rdns = params[0]
 	s.src = params[2]
-	sessions[s.id] = &s
 }
 
-func linkDisconnect(sessionId string, params []string) {
+func linkDisconnect(s *session, params []string) {
 	if len(params) != 0 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
-	delete(sessions, sessionId)
+	delete(sessions, s.id)
 }
 
-func linkGreeting(sessionId string, params []string) {
+func linkGreeting(s *session, params []string) {
 	if len(params) != 1 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := sessions[sessionId]
 	s.mtaName = params[0]
 }
 
-func linkIdentify(sessionId string, params []string) {
+func linkIdentify(s *session, params []string) {
 	if len(params) != 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := sessions[sessionId]
 	s.heloName = params[1]
 }
 
-func linkAuth(sessionId string, params []string) {
+func linkAuth(s *session, params []string) {
 	if len(params) != 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 	if params[1] != "pass" {
 		return
 	}
-	s := sessions[sessionId]
+
 	s.userName = params[0]
 }
 
-func txReset(sessionId string, params []string) {
+func txReset(s *session, params []string) {
 	if len(params) != 1 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := sessions[sessionId]
 	s.msgid = ""
 	s.mailFrom = ""
 	s.rcptTo = nil
@@ -140,16 +134,15 @@ func txReset(sessionId string, params []string) {
 	s.response = ""
 }
 
-func txBegin(sessionId string, params []string) {
+func txBegin(s *session, params []string) {
 	if len(params) != 1 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s := sessions[sessionId]
 	s.msgid = params[0]
 }
 
-func txMail(sessionId string, params []string) {
+func txMail(s *session, params []string) {
 	if len(params) != 3 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
@@ -158,11 +151,10 @@ func txMail(sessionId string, params []string) {
 		return
 	}
 
-	s := sessions[sessionId]
 	s.mailFrom = params[1]
 }
 
-func txRcpt(sessionId string, params []string) {
+func txRcpt(s *session, params []string) {
 	if len(params) != 3 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
@@ -171,18 +163,16 @@ func txRcpt(sessionId string, params []string) {
 		return
 	}
 
-	s := sessions[sessionId]
 	s.rcptTo = append(s.rcptTo, params[1])
 }
 
-func dataLine(sessionId string, params []string) {
+func dataLine(s *session, params []string) {
 	if len(params) < 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 	token := params[0]
 	line := strings.Join(params[1:], "|")
 
-	s := sessions[sessionId]
 	if line == "." {
 		go rspamdQuery(s, token)
 		return
@@ -190,32 +180,31 @@ func dataLine(sessionId string, params []string) {
 	s.message = append(s.message, line)
 }
 
-func dataCommit(sessionId string, params []string) {
+func dataCommit(s *session, params []string) {
 	if len(params) != 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
 	token := params[0]
-	s := sessions[sessionId]
 
 	switch s.action {
 	case "reject":
 		if( s.response == "") {
 			s.response = "message rejected"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, sessionId, s.response)
+		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, s.id, s.response)
 	case "greylist":
 		if( s.response == "") {
 			s.response = "try again later"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, sessionId, s.response)
+		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.response)
 	case "soft reject":
 		if( s.response == "") {
 			s.response = "try again later"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, sessionId, s.response)
+		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, s.id, s.response)
 	default:
-		fmt.Printf("filter-result|%s|%s|proceed\n", token, sessionId)
+		fmt.Printf("filter-result|%s|%s|proceed\n", token, s.id)
 	}
 }
 
@@ -336,9 +325,17 @@ func rspamdQuery(s *session, token string) {
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
 }
 
-func trigger(actions map[string]func(string, []string), atoms []string) {
+func trigger(actions map[string]func(*session, []string), atoms []string) {
+	if atoms[4] == "link-connect" {
+		// special case to simplify subsequent code
+		s := session{}
+		s.id = atoms[5]
+		sessions[s.id] = &s
+	}
+
+	s := sessions[atoms[5]]	
 	if v, ok := actions[atoms[4]]; ok {
-		v(atoms[5], atoms[6:])
+		v(s, atoms[6:])
 	} else {
 		os.Exit(1)
 	}
