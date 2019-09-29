@@ -320,7 +320,7 @@ func rspamdQuery(s *session, token string) {
 				if buf == "" {
 					buf = fmt.Sprintf("%s%s", buf, k)
 				} else {
-					buf = fmt.Sprintf("%s,\n %s", buf, k)
+					buf = fmt.Sprintf("%s,\n\t%s", buf, k)
 				}
 			}
 			writeHeader(s, token, "X-Spam-Symbols", buf)
