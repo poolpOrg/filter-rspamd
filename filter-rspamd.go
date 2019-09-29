@@ -30,8 +30,17 @@ import (
 
 var rspamdURL *string
 
+type tx struct {
+	msgid    string
+	mailFrom string
+	rcptTo   []string
+	message  []string
+	action   string
+	response string
+}
+
 type session struct {
-	id string
+	id       string
 
 	rdns     string
 	src      string
@@ -39,13 +48,7 @@ type session struct {
 	userName string
 	mtaName  string
 
-	msgid    string
-	mailFrom string
-	rcptTo   []string
-	message  []string
-
-	action   string
-	response string
+	tx       tx
 }
 
 type rspamd struct {
@@ -131,12 +134,7 @@ func txReset(s *session, params []string) {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s.msgid = ""
-	s.mailFrom = ""
-	s.rcptTo = nil
-	s.message = nil
-	s.action = ""
-	s.response = ""
+	s.tx = tx{}
 }
 
 func txBegin(s *session, params []string) {
@@ -144,7 +142,7 @@ func txBegin(s *session, params []string) {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	s.msgid = params[0]
+	s.tx.msgid = params[0]
 }
 
 func txMail(s *session, params []string) {
@@ -156,7 +154,7 @@ func txMail(s *session, params []string) {
 		return
 	}
 
-	s.mailFrom = params[1]
+	s.tx.mailFrom = params[1]
 }
 
 func txRcpt(s *session, params []string) {
@@ -168,7 +166,7 @@ func txRcpt(s *session, params []string) {
 		return
 	}
 
-	s.rcptTo = append(s.rcptTo, params[1])
+	s.tx.rcptTo = append(s.tx.rcptTo, params[1])
 }
 
 func dataLine(s *session, params []string) {
@@ -182,7 +180,7 @@ func dataLine(s *session, params []string) {
 		go rspamdQuery(s, token)
 		return
 	}
-	s.message = append(s.message, line)
+	s.tx.message = append(s.tx.message, line)
 }
 
 func dataCommit(s *session, params []string) {
@@ -192,22 +190,22 @@ func dataCommit(s *session, params []string) {
 
 	token := params[0]
 
-	switch s.action {
+	switch s.tx.action {
 	case "reject":
-		if s.response == "" {
-			s.response = "message rejected"
+		if s.tx.response == "" {
+			s.tx.response = "message rejected"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, s.id, s.response)
+		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, s.id, s.tx.response)
 	case "greylist":
-		if s.response == "" {
-			s.response = "try again later"
+		if s.tx.response == "" {
+			s.tx.response = "try again later"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.response)
+		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.tx.response)
 	case "soft reject":
-		if s.response == "" {
-			s.response = "try again later"
+		if s.tx.response == "" {
+			s.tx.response = "try again later"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, s.id, s.response)
+		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, s.id, s.tx.response)
 	default:
 		fmt.Printf("filter-result|%s|%s|proceed\n", token, s.id)
 	}
@@ -224,7 +222,7 @@ func filterInit() {
 }
 
 func flushMessage(s *session, token string) {
-	for _, line := range s.message {
+	for _, line := range s.tx.message {
 		fmt.Printf("filter-dataline|%s|%s|%s\n", token, s.id, line)
 	}
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
@@ -243,7 +241,7 @@ func writeHeader(s *session, token string, h string, t string) {
 }
 
 func rspamdQuery(s *session, token string) {
-	r := strings.NewReader(strings.Join(s.message, "\n"))
+	r := strings.NewReader(strings.Join(s.tx.message, "\n"))
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
 	if err != nil {
@@ -267,14 +265,14 @@ func rspamdQuery(s *session, token string) {
 	req.Header.Add("Hostname", s.rdns)
 	req.Header.Add("Helo", s.heloName)
 	req.Header.Add("MTA-Name", s.mtaName)
-	req.Header.Add("Queue-Id", s.msgid)
-	req.Header.Add("From", s.mailFrom)
+	req.Header.Add("Queue-Id", s.tx.msgid)
+	req.Header.Add("From", s.tx.mailFrom)
 
 	if s.userName != "" {
 		req.Header.Add("User", s.userName)
 	}
 
-	for _, rcptTo := range s.rcptTo {
+	for _, rcptTo := range s.tx.rcptTo {
 		req.Header.Add("Rcpt", rcptTo)
 	}
 
@@ -298,8 +296,8 @@ func rspamdQuery(s *session, token string) {
 	case "greylist":
 		fallthrough
 	case "soft reject":
-		s.action = rr.Action
-		s.response = rr.Messages.SMTP
+		s.tx.action   = rr.Action
+		s.tx.response = rr.Messages.SMTP
 		flushMessage(s, token)
 		return
 	}
@@ -381,7 +379,7 @@ func rspamdQuery(s *session, token string) {
 
 LOOP:
 
-	for _, line := range s.message {
+	for _, line := range s.tx.message {
 		if line == "" {
 			inhdr = false
 			rmhdr = false
