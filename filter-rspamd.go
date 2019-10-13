@@ -241,7 +241,7 @@ func writeHeader(s *session, token string, h string, t string) {
 }
 
 func rspamdQuery(s *session, token string) {
-	r := strings.NewReader(strings.Join(s.tx.message, "\n"))
+	r := strings.NewReader(strings.Join(s.tx.message, "\r\n"))
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
 	if err != nil {
