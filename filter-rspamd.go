@@ -173,6 +173,7 @@ func dataLine(s *session, params []string) {
 	if len(params) < 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
+
 	token := params[0]
 	line := strings.Join(params[1:], "|")
 
@@ -180,6 +181,10 @@ func dataLine(s *session, params []string) {
 		go rspamdQuery(s, token)
 		return
 	}
+
+	// Input is raw SMTP data - unescape leading dots.
+	line = strings.TrimPrefix(line, ".")
+
 	s.tx.message = append(s.tx.message, line)
 }
 
@@ -223,9 +228,18 @@ func filterInit() {
 
 func flushMessage(s *session, token string) {
 	for _, line := range s.tx.message {
-		fmt.Printf("filter-dataline|%s|%s|%s\n", token, s.id, line)
+		writeLine(s, token, line)
 	}
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
+}
+
+func writeLine(s *session, token string, line string) {
+	prefix := ""
+	// Output raw SMTP data - escape leading dots.
+	if strings.HasPrefix(line, ".") {
+		prefix = "."
+	}
+	fmt.Printf("filter-dataline|%s|%s|%s%s\n", token, s.id, prefix, line)
 }
 
 func writeHeader(s *session, token string, h string, t string) {
@@ -403,7 +417,7 @@ LOOP:
 		if rr.Action == "rewrite subject" && inhdr && strings.HasPrefix(line, "Subject: ") {
 			fmt.Printf("filter-dataline|%s|%s|Subject: %s\n", token, s.id, rr.Subject)
 		} else {
-			fmt.Printf("filter-dataline|%s|%s|%s\n", token, s.id, line)
+			writeLine(s, token, line)
 		}
 	}
 	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
