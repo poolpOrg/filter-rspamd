@@ -28,7 +28,7 @@ On OpenBSD:
 ```
 $ doas pkg_add opensmtpd-filter-rspamd
 quirks-3.167 signed on 2019-08-11T14:18:58Z
-opensmtpd-filter-rspamd-0.1.3: ok
+opensmtpd-filter-rspamd-0.1.x: ok
 $
 ```
 
