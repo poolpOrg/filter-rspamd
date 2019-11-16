@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sort"
 
 	"encoding/json"
 	"log"
@@ -64,7 +65,9 @@ type rspamd struct {
 		Remove map[string]int8        `json:"remove_headers"`
 		Add    map[string]interface{} `json:"add_headers"`
 	} `json:"milter"`
-	Symbols map[string]interface{} `json:"symbols"`
+	Symbols map[string]struct{
+		Score   float32
+	} `json:"symbols"`
 }
 
 var sessions = make(map[string]*session)
@@ -341,15 +344,42 @@ func rspamdQuery(s *session, token string) {
 				rr.Score, rr.RequiredScore))
 
 		if len(rr.Symbols) != 0 {
-			buf := ""
-			for k, _ := range rr.Symbols {
-				if buf == "" {
-					buf = fmt.Sprintf("%s%s", buf, k)
-				} else {
-					buf = fmt.Sprintf("%s,\n\t%s", buf, k)
-				}
+			symbols := make([]string, len(rr.Symbols))
+			buf     := &strings.Builder{}
+			i       := 0
+
+			fmt.Printf("filter-dataline|%s|%s|%s: %s, score=%.3f required=%.3f\n",
+				token, s.id, "X-Spam-Status", "Yes", rr.Score, rr.RequiredScore)
+
+			for k := range rr.Symbols {
+				symbols[i] = k
+				i++
 			}
-			writeHeader(s, token, "X-Spam-Symbols", buf)
+	
+			sort.Strings(symbols)
+
+			buf.WriteString("tests=[")
+
+			for i, k := range symbols {
+				sym := fmt.Sprintf("%s=%.3f", k, rr.Symbols[k].Score)
+
+				if buf.Len() > 0 && len(sym) + buf.Len() > 68 {
+					fmt.Printf("filter-dataline|%s|%s|\t%s\n",
+						token, s.id, buf.String())
+					buf.Reset()
+				}
+
+				if buf.Len() > 0 && i > 0 {
+					buf.WriteString(", ")
+				}
+
+				buf.WriteString(sym)
+			}
+
+			fmt.Printf("filter-dataline|%s|%s|\t%s]\n",
+				token, s.id, buf.String())
+
+			buf.Reset()
 		}
 	}
 
