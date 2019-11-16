@@ -196,6 +196,11 @@ func dataCommit(s *session, params []string) {
 	token := params[0]
 
 	switch s.tx.action {
+	case "tempfail":
+		if s.tx.response == "" {
+			s.tx.response = "server internal error"
+		}
+		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.tx.response)
 	case "reject":
 		if s.tx.response == "" {
 			s.tx.response = "message rejected"
@@ -254,12 +259,19 @@ func writeHeader(s *session, token string, h string, t string) {
 	}
 }
 
+func rspamdTempFail(s *session, token string, log string) {
+	s.tx.action   = "tempfail"
+	s.tx.response = "server internal error"
+	flushMessage(s, token)
+	fmt.Fprintln(os.Stderr, log)
+}
+
 func rspamdQuery(s *session, token string) {
 	r := strings.NewReader(strings.Join(s.tx.message, "\n"))
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
 	if err != nil {
-		flushMessage(s, token)
+		rspamdTempFail(s, token, "failed to initialize HTTP request")
 		return
 	}
 
@@ -292,7 +304,7 @@ func rspamdQuery(s *session, token string) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		flushMessage(s, token)
+		rspamdTempFail(s, token, "failed to receive a response from daemon")
 		return
 	}
 
@@ -300,7 +312,7 @@ func rspamdQuery(s *session, token string) {
 
 	rr := &rspamd{}
 	if err := json.NewDecoder(resp.Body).Decode(rr); err != nil {
-		flushMessage(s, token)
+		rspamdTempFail(s, token, "failed to decode JSON response")
 		return
 	}
 
