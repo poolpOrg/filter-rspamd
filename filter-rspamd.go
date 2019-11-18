@@ -60,7 +60,7 @@ type rspamd struct {
 	Messages      struct {
 		SMTP string `json:"smtp_message"`
 	} `json:"messages"`
-	DKIMSig string `json:"dkim-signature"`
+	RawDKIMSig json.RawMessage `json:"dkim-signature"`
 	Headers struct {
 		Remove map[string]int8        `json:"remove_headers"`
 		Add    map[string]interface{} `json:"add_headers"`
@@ -331,8 +331,26 @@ func rspamdQuery(s *session, token string) {
 		return
 	}
 
-	if rr.DKIMSig != "" {
-		writeHeader(s, token, "DKIM-Signature", rr.DKIMSig)
+	if len(rr.RawDKIMSig) > 0 {
+		var DKIMSig []string
+		switch rr.RawDKIMSig[0] {
+		case '[':
+			err := json.Unmarshal(rr.RawDKIMSig, &DKIMSig)
+			if err != nil {
+				rspamdTempFail(s, token, "failed to decode DKIM Signature")
+			}
+		case '"':
+			var str string
+			err := json.Unmarshal(rr.RawDKIMSig, &str)
+			if err != nil {
+				rspamdTempFail(s, token, "failed to decode DKIM Signature")
+			}
+			DKIMSig = append(DKIMSig, str)
+
+		}
+		for _, sig := range DKIMSig {
+			writeHeader(s, token, "DKIM-Signature", sig)
+		}
 	}
 
 	if rr.Action == "add header" {
