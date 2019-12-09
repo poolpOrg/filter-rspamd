@@ -30,6 +30,7 @@ import (
 )
 
 var rspamdURL *string
+var version string
 
 type tx struct {
 	msgid    string
@@ -203,24 +204,47 @@ func dataCommit(s *session, params []string) {
 		if s.tx.response == "" {
 			s.tx.response = "server internal error"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.tx.response)
+		if version < "0.5" {
+			fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.tx.response)
+		} else {
+			fmt.Printf("filter-result|%s|%s|reject|421 %s\n", s.id, token, s.tx.response)
+		}
+
 	case "reject":
 		if s.tx.response == "" {
 			s.tx.response = "message rejected"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, s.id, s.tx.response)
+		if version < "0.5" {
+			fmt.Printf("filter-result|%s|%s|reject|550 %s\n", token, s.id, s.tx.response)
+		} else {
+			fmt.Printf("filter-result|%s|%s|reject|550 %s\n", s.id, token, s.tx.response)
+		}
 	case "greylist":
 		if s.tx.response == "" {
 			s.tx.response = "try again later"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.tx.response)
+		if version < "0.5" {
+			fmt.Printf("filter-result|%s|%s|reject|421 %s\n", token, s.id, s.tx.response)
+		} else {
+			fmt.Printf("filter-result|%s|%s|reject|421 %s\n", s.id, token, s.tx.response)
+		}
+
 	case "soft reject":
 		if s.tx.response == "" {
 			s.tx.response = "try again later"
 		}
-		fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, s.id, s.tx.response)
+		if version < "0.5" {
+			fmt.Printf("filter-result|%s|%s|reject|451 %s\n", token, s.id, s.tx.response)
+		} else {
+			fmt.Printf("filter-result|%s|%s|reject|451 %s\n", s.id, token, s.tx.response)
+		}
+
 	default:
-		fmt.Printf("filter-result|%s|%s|proceed\n", token, s.id)
+		if version < "0.5" {
+			fmt.Printf("filter-result|%s|%s|proceed\n", token, s.id)
+		} else {
+			fmt.Printf("filter-result|%s|%s|proceed\n", s.id, token)
+		}
 	}
 }
 
@@ -238,7 +262,11 @@ func flushMessage(s *session, token string) {
 	for _, line := range s.tx.message {
 		writeLine(s, token, line)
 	}
-	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
+	if version < "0.5" {
+		fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
+	} else {
+		fmt.Printf("filter-dataline|%s|%s|.\n", s.id, token)
+	}
 }
 
 func writeLine(s *session, token string, line string) {
@@ -247,17 +275,31 @@ func writeLine(s *session, token string, line string) {
 	if strings.HasPrefix(line, ".") {
 		prefix = "."
 	}
-	fmt.Printf("filter-dataline|%s|%s|%s%s\n", token, s.id, prefix, line)
+	if version < "0.5" {
+		fmt.Printf("filter-dataline|%s|%s|%s%s\n", token, s.id, prefix, line)
+	} else {
+		fmt.Printf("filter-dataline|%s|%s|%s%s\n", s.id, token, prefix, line)
+	}
 }
 
 func writeHeader(s *session, token string, h string, t string) {
 	for i, line := range strings.Split(t, "\n") {
 		if i == 0 {
-			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
-				token, s.id, h, line)
+			if version < "0.5" {
+				fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
+					token, s.id, h, line)
+			} else {
+				fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
+					s.id, token, h, line)
+			}
 		} else {
-			fmt.Printf("filter-dataline|%s|%s|%s\n",
-				token, s.id, line)
+			if version < "0.5" {
+				fmt.Printf("filter-dataline|%s|%s|%s\n",
+					token, s.id, line)
+			} else {
+				fmt.Printf("filter-dataline|%s|%s|%s\n",
+					s.id, token, line)
+			}
 		}
 	}
 }
@@ -336,20 +378,34 @@ func rspamdQuery(s *session, token string) {
 	}
 
 	if rr.Action == "add header" {
-		fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
-			token, s.id, "X-Spam", "yes")
-		fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
-			token, s.id, "X-Spam-Score",
-			fmt.Sprintf("%v / %v",
-				rr.Score, rr.RequiredScore))
+		if version < "0.5" {
+			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
+				token, s.id, "X-Spam", "yes")
+			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
+				token, s.id, "X-Spam-Score",
+				fmt.Sprintf("%v / %v",
+					rr.Score, rr.RequiredScore))
+		} else {
+			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
+				s.id, token, "X-Spam", "yes")
+			fmt.Printf("filter-dataline|%s|%s|%s: %s\n",
+				s.id, token, "X-Spam-Score",
+				fmt.Sprintf("%v / %v",
+					rr.Score, rr.RequiredScore))
+		}
 
 		if len(rr.Symbols) != 0 {
 			symbols := make([]string, len(rr.Symbols))
 			buf     := &strings.Builder{}
 			i       := 0
 
-			fmt.Printf("filter-dataline|%s|%s|%s: %s, score=%.3f required=%.3f\n",
-				token, s.id, "X-Spam-Status", "Yes", rr.Score, rr.RequiredScore)
+			if version < "0.5" {
+				fmt.Printf("filter-dataline|%s|%s|%s: %s, score=%.3f required=%.3f\n",
+					token, s.id, "X-Spam-Status", "Yes", rr.Score, rr.RequiredScore)
+			} else {
+				fmt.Printf("filter-dataline|%s|%s|%s: %s, score=%.3f required=%.3f\n",
+					s.id, token, "X-Spam-Status", "Yes", rr.Score, rr.RequiredScore)
+			}
 
 			for k := range rr.Symbols {
 				symbols[i] = k
@@ -364,8 +420,13 @@ func rspamdQuery(s *session, token string) {
 				sym := fmt.Sprintf("%s=%.3f", k, rr.Symbols[k].Score)
 
 				if buf.Len() > 0 && len(sym) + buf.Len() > 68 {
-					fmt.Printf("filter-dataline|%s|%s|\t%s\n",
-						token, s.id, buf.String())
+					if version < "0.5" {
+						fmt.Printf("filter-dataline|%s|%s|\t%s\n",
+							token, s.id, buf.String())
+					} else {
+						fmt.Printf("filter-dataline|%s|%s|\t%s\n",
+							s.id, token, buf.String())
+					}
 					buf.Reset()
 				}
 
@@ -376,8 +437,13 @@ func rspamdQuery(s *session, token string) {
 				buf.WriteString(sym)
 			}
 
-			fmt.Printf("filter-dataline|%s|%s|\t%s]\n",
-				token, s.id, buf.String())
+			if version < "0.5" {
+				fmt.Printf("filter-dataline|%s|%s|\t%s]\n",
+					token, s.id, buf.String())
+			} else {
+				fmt.Printf("filter-dataline|%s|%s|\t%s]\n",
+					s.id, token, buf.String())
+			}
 
 			buf.Reset()
 		}
@@ -457,12 +523,20 @@ LOOP:
 			}
 		}
 		if rr.Action == "rewrite subject" && inhdr && strings.HasPrefix(line, "Subject: ") {
-			fmt.Printf("filter-dataline|%s|%s|Subject: %s\n", token, s.id, rr.Subject)
+			if version < "0.5" {
+				fmt.Printf("filter-dataline|%s|%s|Subject: %s\n", token, s.id, rr.Subject)
+			} else {
+				fmt.Printf("filter-dataline|%s|%s|Subject: %s\n", s.id, token, rr.Subject)
+			}
 		} else {
 			writeLine(s, token, line)
 		}
 	}
-	fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
+	if version < "0.5" {
+		fmt.Printf("filter-dataline|%s|%s|.\n", token, s.id)
+	} else {
+		fmt.Printf("filter-dataline|%s|%s|.\n", s.id, token)
+	}
 }
 
 func trigger(actions map[string]func(*session, []string), atoms []string) {
@@ -512,6 +586,8 @@ func main() {
 		if len(atoms) < 6 {
 			os.Exit(1)
 		}
+
+		version = atoms[1]
 
 		switch atoms[0] {
 		case "report":
