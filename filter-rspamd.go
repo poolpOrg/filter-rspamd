@@ -21,8 +21,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"sort"
+	"strings"
 
 	"encoding/json"
 	"log"
@@ -44,7 +44,7 @@ type tx struct {
 }
 
 type session struct {
-	id       string
+	id string
 
 	rdns     string
 	src      string
@@ -52,7 +52,7 @@ type session struct {
 	userName string
 	mtaName  string
 
-	tx       tx
+	tx tx
 }
 
 type rspamd struct {
@@ -68,8 +68,8 @@ type rspamd struct {
 		Remove map[string]int8        `json:"remove_headers"`
 		Add    map[string]interface{} `json:"add_headers"`
 	} `json:"milter"`
-	Symbols map[string]struct{
-		Score   float32
+	Symbols map[string]struct {
+		Score float32
 	} `json:"symbols"`
 }
 
@@ -284,7 +284,7 @@ func writeHeader(s *session, token string, h string, t string) {
 }
 
 func rspamdTempFail(s *session, token string, log string) {
-	s.tx.action   = "tempfail"
+	s.tx.action = "tempfail"
 	s.tx.response = "server internal error"
 	flushMessage(s, token)
 	fmt.Fprintln(os.Stderr, log)
@@ -346,7 +346,7 @@ func rspamdQuery(s *session, token string) {
 	case "greylist":
 		fallthrough
 	case "soft reject":
-		s.tx.action   = rr.Action
+		s.tx.action = rr.Action
 		s.tx.response = rr.Messages.SMTP
 		flushMessage(s, token)
 		return
@@ -378,8 +378,8 @@ func rspamdQuery(s *session, token string) {
 
 		if len(rr.Symbols) != 0 {
 			symbols := make([]string, len(rr.Symbols))
-			buf     := &strings.Builder{}
-			i       := 0
+			buf := &strings.Builder{}
+			i := 0
 
 			produceOutput("filter-dataline", s.id, token,
 				"%s: %s, score=%.3f required=%.3f",
@@ -390,7 +390,7 @@ func rspamdQuery(s *session, token string) {
 				symbols[i] = k
 				i++
 			}
-	
+
 			sort.Strings(symbols)
 
 			buf.WriteString("tests=[")
@@ -398,7 +398,7 @@ func rspamdQuery(s *session, token string) {
 			for i, k := range symbols {
 				sym := fmt.Sprintf("%s=%.3f", k, rr.Symbols[k].Score)
 
-				if buf.Len() > 0 && len(sym) + buf.Len() > 68 {
+				if buf.Len() > 0 && len(sym)+buf.Len() > 68 {
 					produceOutput("filter-dataline", s.id, token, "\t%s",
 						buf.String())
 					buf.Reset()
