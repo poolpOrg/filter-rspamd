@@ -512,7 +512,7 @@ func trigger(actions map[string]func(*session, []string), atoms []string) {
 	if v, ok := actions[atoms[4]]; ok {
 		v(s, atoms[6:])
 	} else {
-		os.Exit(1)
+		log.Fatalf("invalid phase: %s", atoms[4])
 	}
 }
 
@@ -550,9 +550,10 @@ func main() {
 			os.Exit(0)
 		}
 
-		atoms := strings.Split(scanner.Text(), "|")
+		line := scanner.Text()
+		atoms := strings.Split(line, "|")
 		if len(atoms) < 6 {
-			os.Exit(1)
+			log.Fatalf("missing atoms: %s", line)
 		}
 
 		version = atoms[1]
@@ -563,7 +564,7 @@ func main() {
 		case "filter":
 			trigger(filters, atoms)
 		default:
-			os.Exit(1)
+			log.Fatalf("invalid stream: %s", atoms[0])
 		}
 	}
 }
