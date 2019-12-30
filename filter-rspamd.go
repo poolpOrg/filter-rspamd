@@ -508,7 +508,11 @@ func trigger(actions map[string]func(*session, []string), atoms []string) {
 		sessions[s.id] = &s
 	}
 
-	s := sessions[atoms[5]]
+	s, ok := sessions[atoms[5]]
+	if !ok {
+		log.Fatalf("invalid session ID: %s", atoms[5])
+	}
+
 	if v, ok := actions[atoms[4]]; ok {
 		v(s, atoms[6:])
 	} else {
