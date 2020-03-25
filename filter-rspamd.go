@@ -27,8 +27,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-
-	"github.com/estrogently/puffy"
 )
 
 var rspamdURL *string
@@ -538,10 +536,10 @@ func main() {
 	rspamdURL = flag.String("url", "http://localhost:11333", "rspamd base url")
 	flag.Parse()
 
-	puffy.PledgePromises("stdio rpath inet dns unveil")
-	puffy.Unveil("/etc/resolv.conf", "r")
-	puffy.Unveil("/etc/hosts", "r")
-	puffy.UnveilBlock()
+	PledgePromises("stdio rpath inet dns unveil")
+	Unveil("/etc/resolv.conf", "r")
+	Unveil("/etc/hosts", "r")
+	UnveilBlock()
 
 	scanner := bufio.NewScanner(os.Stdin)
 
