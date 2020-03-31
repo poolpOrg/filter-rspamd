@@ -536,6 +536,11 @@ func main() {
 	rspamdURL = flag.String("url", "http://localhost:11333", "rspamd base url")
 	flag.Parse()
 
+	PledgePromises("stdio rpath inet dns unveil")
+	Unveil("/etc/resolv.conf", "r")
+	Unveil("/etc/hosts", "r")
+	UnveilBlock()
+
 	scanner := bufio.NewScanner(os.Stdin)
 
 	skipConfig(scanner)
