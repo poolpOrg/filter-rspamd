@@ -152,27 +152,49 @@ func txBegin(s *session, params []string) {
 }
 
 func txMail(s *session, params []string) {
-	if len(params) != 3 {
+	if len(params) < 3 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	if params[2] != "ok" {
+	var status string
+	if version < "0.6" {
+		status = params[2]
+	} else {
+		status = params[1]
+	}
+
+	if status != "ok" {
 		return
 	}
 
-	s.tx.mailFrom = params[1]
+	if version < "0.6" {
+		s.tx.mailFrom = strings.Join(params[1:len(params)-2], "|")
+	} else {
+		s.tx.mailFrom = strings.Join(params[2:len(params)-1], "|")
+	}
 }
 
 func txRcpt(s *session, params []string) {
-	if len(params) != 3 {
+	if len(params) < 3 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
 
-	if params[2] != "ok" {
+	var status string
+	if version < "0.6" {
+		status = params[2]
+	} else {
+		status = params[1]
+	}
+
+	if status != "ok" {
 		return
 	}
 
-	s.tx.rcptTo = append(s.tx.rcptTo, params[1])
+	if version < "0.6" {
+		s.tx.rcptTo = append(s.tx.rcptTo, strings.Join(params[1:len(params)-2], "|"))
+	} else {
+		s.tx.rcptTo = append(s.tx.rcptTo, strings.Join(params[2:len(params)-1], "|"))
+	}
 }
 
 func dataLine(s *session, params []string) {
