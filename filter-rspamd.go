@@ -253,12 +253,6 @@ func dataCommit(s *session, params []string) {
 		}
 		produceOutput("filter-result", s.id, token, "reject|550 %s", s.tx.response)
 
-	case "greylist":
-		if s.tx.response == "" {
-			s.tx.response = "try again later"
-		}
-		produceOutput("filter-result", s.id, token, "reject|421 %s", s.tx.response)
-
 	case "soft reject":
 		if s.tx.response == "" {
 			s.tx.response = "try again later"
@@ -368,8 +362,6 @@ func rspamdQuery(s *session, token string) {
 
 	switch rr.Action {
 	case "reject":
-		fallthrough
-	case "greylist":
 		fallthrough
 	case "soft reject":
 		s.tx.action = rr.Action
