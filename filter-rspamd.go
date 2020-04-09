@@ -157,21 +157,24 @@ func txMail(s *session, params []string) {
 	}
 
 	var status string
+	var mailaddr string
+
 	if version < "0.6" {
-		status = params[2]
+		_ = params[0]
+		mailaddr = strings.Join(params[1:len(params)-1], "|")
+		status = params[len(params)-1]
 	} else {
+		fmt.Fprintf(os.Stderr, "txMail: new Format\n")
+		_ = params[0]
 		status = params[1]
+		mailaddr = strings.Join(params[2:], "|")
 	}
 
 	if status != "ok" {
 		return
 	}
 
-	if version < "0.6" {
-		s.tx.mailFrom = strings.Join(params[1:len(params)-2], "|")
-	} else {
-		s.tx.mailFrom = strings.Join(params[2:len(params)-1], "|")
-	}
+	s.tx.mailFrom = mailaddr
 }
 
 func txRcpt(s *session, params []string) {
@@ -180,21 +183,23 @@ func txRcpt(s *session, params []string) {
 	}
 
 	var status string
+	var mailaddr string
+
 	if version < "0.6" {
-		status = params[2]
+		_ = params[0]
+		mailaddr = strings.Join(params[1:len(params)-1], "|")
+		status = params[len(params)-1]
 	} else {
+		_ = params[0]
 		status = params[1]
+		mailaddr = strings.Join(params[2:], "|")
 	}
 
 	if status != "ok" {
 		return
 	}
 
-	if version < "0.6" {
-		s.tx.rcptTo = append(s.tx.rcptTo, strings.Join(params[1:len(params)-2], "|"))
-	} else {
-		s.tx.rcptTo = append(s.tx.rcptTo, strings.Join(params[2:len(params)-1], "|"))
-	}
+	s.tx.rcptTo = append(s.tx.rcptTo, mailaddr)
 }
 
 func dataLine(s *session, params []string) {
