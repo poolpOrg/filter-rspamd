@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 	"github.com/tv42/httpunix"
 )
 
@@ -316,10 +315,7 @@ func rspamdTempFail(s *session, token string, log string) {
 func rspamdQuery(s *session, token string) {
 	r := strings.NewReader(strings.Join(s.tx.message, "\n"))
 	t := &http.Transport{}
-	u := &httpunix.Transport{
-		DialTimeout:           100 * time.Millisecond,
-		ResponseHeaderTimeout: 1 * time.Second,
-	}
+	u := &httpunix.Transport{}
 	if len(unixSocketPath) > 0 {
 		u.RegisterLocation("rspamdsocket", unixSocketPath)
 		t.RegisterProtocol(httpunix.Scheme, u)
