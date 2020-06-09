@@ -27,9 +27,12 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
+	"github.com/tv42/httpunix"
 )
 
 var rspamdURL *string
+var unixSocketPath string
 var version string
 
 var outputChannel chan string
@@ -312,7 +315,16 @@ func rspamdTempFail(s *session, token string, log string) {
 
 func rspamdQuery(s *session, token string) {
 	r := strings.NewReader(strings.Join(s.tx.message, "\n"))
-	client := &http.Client{}
+	t := &http.Transport{}
+	u := &httpunix.Transport{
+		DialTimeout:           100 * time.Millisecond,
+		ResponseHeaderTimeout: 1 * time.Second,
+	}
+	if len(unixSocketPath) > 0 {
+		u.RegisterLocation("rspamdsocket", unixSocketPath)
+		t.RegisterProtocol(httpunix.Scheme, u)
+	}
+	client := &http.Client{Transport: t}
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
 	if err != nil {
 		rspamdTempFail(s, token, "failed to initialize HTTP request")
@@ -551,8 +563,13 @@ func skipConfig(scanner *bufio.Scanner) {
 }
 
 func main() {
-	rspamdURL = flag.String("url", "http://localhost:11333", "rspamd base url")
+	rspamdURL = flag.String("url", "http://localhost:11333", "rspamd base url (or path to unix socket)")
 	flag.Parse()
+	// if url param starts with / assume its unix socket, save it in unixSocketPath
+	if strings.HasPrefix(*rspamdURL, "/") {
+		 unixSocketPath = *rspamdURL
+		*rspamdURL = "http+unix://rspamdsocket"
+	}
 
 	PledgePromises("stdio rpath inet dns unveil")
 	Unveil("/etc/resolv.conf", "r")
