@@ -1,0 +1,78 @@
+.\" Copyright (C) 2020 Ryan Kavanagh <rak@debian.org>
+.\" All rights reserved.
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.Dd April 24, 2020
+.Dt FILTER-RSPAMD 8
+.Os
+.Sh NAME
+.Nm filter-rspamd
+.Nd Rspamd filter for OpenSMTPD
+.Sh SYNOPSIS
+.Nm filter-rspamd
+.Op Fl url Ar url
+.Sh DESCRIPTION
+The
+.Nm
+filter for the OpenSMTPD
+.Pq Xr smtpd 8
+server filters sessions through an rspamd daemon.
+Its options are:
+.Bl -tag -width url
+.It Fl url Ar url
+Connect to the remote rspamd instance located at
+.Ar url .
+This flag is optional.
+If unspecified,
+.Nm
+will connect to the rspamd instance located at
+.Lk http://localhost:11333 .
+.El
+.Pp
+All other rspamd-related configuration, e.g., regarding thresholds or enabled
+modules, must be done in rspamd itself.
+.Sh EXIT STATUS
+.Ex -std
+.Sh EXAMPLES
+Adding the following to
+.Pa smtpd.conf
+enables
+.Nm
+for all incoming connections.
+In this configuration, the local rspamd daemon is used.
+.Bd -literal -offset indent
+filter "rspamd" proc-exec "filter-rspamd"
+
+listen on all filter "rspamd"
+.Ed
+.Pp
+The following enables
+.Nm
+for all incoming connections using a remote rspamd daemon.
+.Bd -literal -offset indent
+filter "rspamd" proc-exec "filter-rspamd -url http://example.org:11333"
+
+listen on all filter "rspamd"
+.Ed
+.Sh SEE ALSO
+.Xr smtpd.conf 5 ,
+.Xr rspamd 8
+.Sh AUTHORS
+.Nm
+is Copyright \(co 2019
+.An -nosplit
+.An Gilles Chehade Aq Mt gilles@poolp.org .
+This man page is Copyright \(co 2020
+.An Ryan Kavanagh Aq Mt rak@debian.org .
+Both are distributed under the ISC license.
+.Sh BUGS
+None known.
