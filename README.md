@@ -39,6 +39,11 @@ $ go build
 $ doas install -m 0555 filter-rspamd /usr/local/libexec/smtpd/filter-rspamd
 ```
 
+On Ubuntu the directory to install to is different:
+```
+$ sudo install -m 0555 filter-rspamd /usr/libexec/opensmtpd/filter-rspamd
+```
+
 
 ## How to configure
 The filter itself requires no configuration.
