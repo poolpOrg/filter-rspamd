@@ -30,6 +30,7 @@ import (
 )
 
 var rspamdURL *string
+var rspamdSettingsId *string
 var version string
 
 var outputChannel chan string
@@ -338,6 +339,10 @@ func rspamdQuery(s *session, token string) {
 	req.Header.Add("Queue-Id", s.tx.msgid)
 	req.Header.Add("From", s.tx.mailFrom)
 
+	if *rspamdSettingsId != "" {
+		req.Header.Add("Settings-ID", *rspamdSettingsId)
+	}
+
 	if s.userName != "" {
 		req.Header.Add("User", s.userName)
 	}
@@ -552,6 +557,8 @@ func skipConfig(scanner *bufio.Scanner) {
 
 func main() {
 	rspamdURL = flag.String("url", "http://localhost:11333", "rspamd base url")
+	rspamdSettingsId = flag.String("settings-id", "", "rspamd Settings-ID")
+
 	flag.Parse()
 
 	PledgePromises("stdio rpath inet dns unveil")
