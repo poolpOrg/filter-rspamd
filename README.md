@@ -17,7 +17,7 @@ The filter currently supports:
 
 
 ## Dependencies
-The filter is written in Golang and doesn't have any dependencies beyond standard library.
+The filter is written in Golang and doesn't have any dependencies beyond the Go extended standard library.
 
 It requires OpenSMTPD 6.6.0 or higher.
 
@@ -30,6 +30,12 @@ $ doas pkg_add opensmtpd-filter-rspamd
 quirks-3.167 signed on 2019-08-11T14:18:58Z
 opensmtpd-filter-rspamd-0.1.x: ok
 $
+```
+
+Install using Go:
+```
+$ GO111MODULE=on go get github.com/poolpOrg/filter-rspamd
+$ doas install -m 0555 ~/go/bin/filter-rspamd /usr/local/libexec/smtpd/filter-rspamd
 ```
 
 Alternatively, clone the repository, build and install the filter:
