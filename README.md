@@ -62,5 +62,34 @@ filter "rspamd" proc-exec "filter-rspamd -url http://example.org:11333"
 listen on all filter "rspamd"
 ```
 
+Optionally a `-settings-id` parameter can be used to select a specific rspamd
+setting. One usecase is for example to apply different rspamd rules to incoming
+and outgoing emails:
+
+```
+filter "rspamd-incoming" proc-exec "filter-rspamd"
+filter "rspamd-outgoing" proc-exec "filter-rspamd -settings-id outgoing"
+
+listen on all filter "rspamd-incoming"
+listen on all port submission filter "rspamd-outgoing"
+```
+
+And in `rspamd/local.d/settings.conf`:
+
+```
+outgoing {
+    id = "outgoing";
+    apply {
+        enable_groups = ["dkim"];
+        actions {
+            reject = 100.0;
+            greylist = 100.0;
+            "add header" = 100.0;
+        }
+    }
+}
+```
+
+Every email passed through the `rspamd-outgoing` filter will use the rspamd `outgoing` rule instead of the default rule.
 
 Any configuration with regard to thresholds or enabled modules must be done in rspamd itself.
