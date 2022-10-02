@@ -560,9 +560,21 @@ func trigger(actions map[string]func(*session, []string), atoms []string) {
 	}
 }
 
+func cleanUp() {
+	if len(unixSocketPath) > 0 {
+		// remove dangling socket files
+		e := os.Remove(unixSocketPath)
+		// ignore error if unix socket does not exists
+		if e != nil && !os.IsNotExist(e) {
+			log.Fatal(e)
+		}
+	}
+}
+
 func skipConfig(scanner *bufio.Scanner) {
 	for {
 		if !scanner.Scan() {
+			cleanUp()
 			os.Exit(0)
 		}
 		line := scanner.Text()
@@ -603,6 +615,7 @@ func main() {
 
 	for {
 		if !scanner.Scan() {
+			cleanUp()
 			os.Exit(0)
 		}
 
@@ -623,4 +636,5 @@ func main() {
 			log.Fatalf("invalid stream: %s", atoms[0])
 		}
 	}
+	cleanUp()
 }
