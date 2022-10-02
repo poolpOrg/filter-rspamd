@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -26,10 +27,12 @@ import (
 
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 )
 
 var rspamdURL *string
+var unixSocketPath string
 var rspamdSettingsId *string
 var version string
 
@@ -312,8 +315,22 @@ func rspamdTempFail(s *session, token string, log string) {
 }
 
 func rspamdQuery(s *session, token string) {
+	var client *http.Client
+
 	r := strings.NewReader(strings.Join(s.tx.message, "\n"))
-	client := &http.Client{}
+
+	if len(unixSocketPath) > 0 {
+		client = &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+					return net.Dial("unix", unixSocketPath)
+				},
+			},
+		}
+	} else {
+		client = &http.Client{}
+	}
+
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
 	if err != nil {
 		rspamdTempFail(s, token, "failed to initialize HTTP request")
@@ -556,10 +573,15 @@ func skipConfig(scanner *bufio.Scanner) {
 }
 
 func main() {
-	rspamdURL = flag.String("url", "http://localhost:11333", "rspamd base url")
+	rspamdURL = flag.String("url", "http://localhost:11333", "rspamd base url (or path to unix socket)")
 	rspamdSettingsId = flag.String("settings-id", "", "rspamd Settings-ID")
 
 	flag.Parse()
+
+	if strings.HasPrefix(*rspamdURL, "/") {
+		unixSocketPath = *rspamdURL
+		*rspamdURL = "http://localhost"
+	}
 
 	PledgePromises("stdio rpath inet dns unveil")
 	Unveil("/etc/resolv.conf", "r")
