@@ -86,7 +86,7 @@ And in `rspamd/local.d/settings.conf`:
 outgoing {
     id = "outgoing";
     apply {
-        enable_groups = ["dkim"];
+        groups_enabled = ["dkim"];
         actions {
             reject = 100.0;
             greylist = 100.0;
