@@ -583,7 +583,7 @@ func main() {
 		*rspamdURL = "http://localhost"
 	}
 
-	PledgePromises("stdio rpath inet dns unveil")
+	PledgePromises("stdio rpath inet dns unix unveil")
 	Unveil("/etc/resolv.conf", "r")
 	Unveil("/etc/hosts", "r")
 	UnveilBlock()
