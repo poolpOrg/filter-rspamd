@@ -316,24 +316,34 @@ func rspamdTempFail(s *session, token string, log string) {
 
 func rspamdQuery(s *session, token string) {
 	var client *http.Client
+	var req *http.Request
 
 	r := strings.NewReader(strings.Join(s.tx.message, "\n"))
 
 	if len(unixSocketPath) > 0 {
-		client = &http.Client{
-			Transport: &http.Transport{
-				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-					return net.Dial("unix", unixSocketPath)
-				},
-			},
+		tr := new(http.Transport)
+		tr.DisableCompression = true
+		tr.Dial = nil
+		tr.DialContext = func(_ context.Context, _, _ string) (net.Conn, error) {
+			var u_addr *net.UnixAddr
+			var err error
+			network := "unix"
+			u_addr, err = net.ResolveUnixAddr(network, unixSocketPath)
+			if err != nil {
+				rspamdTempFail(s, token, fmt.Sprintf("failed to resolve unix path '%s': %v\n", unixSocketPath, err))
+				return nil, err
+			} else {
+				return net.DialUnix(network, nil, u_addr)
+			}
 		}
+		client = &http.Client{Transport: tr}
 	} else {
 		client = &http.Client{}
 	}
-
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
+	var err error
+	req, err = http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
 	if err != nil {
-		rspamdTempFail(s, token, "failed to initialize HTTP request")
+		rspamdTempFail(s, token, fmt.Sprintf("failed to initialize HTTP request. err: '%s'", err))
 		return
 	}
 
@@ -370,7 +380,7 @@ func rspamdQuery(s *session, token string) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		rspamdTempFail(s, token, "failed to receive a response from daemon")
+		rspamdTempFail(s, token, fmt.Sprintf("failed to receive a response from daemon. err: '%s'", err))
 		return
 	}
 
@@ -378,7 +388,7 @@ func rspamdQuery(s *session, token string) {
 
 	rr := &rspamd{}
 	if err := json.NewDecoder(resp.Body).Decode(rr); err != nil {
-		rspamdTempFail(s, token, "failed to decode JSON response")
+		rspamdTempFail(s, token, fmt.Sprintf("failed to decode JSON response, err: '%s'", err))
 		return
 	}
 
@@ -563,6 +573,7 @@ func trigger(actions map[string]func(*session, []string), atoms []string) {
 func skipConfig(scanner *bufio.Scanner) {
 	for {
 		if !scanner.Scan() {
+			log.Print("no more lines to scan for skipping. exiting...")
 			os.Exit(0)
 		}
 		line := scanner.Text()
@@ -578,20 +589,48 @@ func main() {
 
 	flag.Parse()
 
-	if strings.HasPrefix(*rspamdURL, "/") {
-		unixSocketPath = *rspamdURL
-		*rspamdURL = "http://localhost"
+	if err := PledgePromises("stdio rpath inet dns unix unveil"); err != nil {
+		log.Fatalf("pledge promise err: %s", err)
 	}
 
-	PledgePromises("stdio rpath inet dns unix unveil")
-	Unveil("/etc/resolv.conf", "r")
-	Unveil("/etc/hosts", "r")
-	UnveilBlock()
+	if err := Unveil("/etc/resolv.conf", "r"); err != nil {
+		log.Fatalf("unveil resolv err: %s", err)
+	}
 
+	if err := Unveil("/etc/hosts", "r"); err != nil {
+		log.Fatalf("unveil hosts err: %s", err)
+	}
+
+	if !strings.HasPrefix(*rspamdURL, "http") {
+		unixSocketPath = *rspamdURL
+		*rspamdURL = "http://localhost"
+
+		if err := Unveil(unixSocketPath, "rw"); err != nil {
+			log.Fatalf("unveil '%s' err: %s", unixSocketPath, err)
+		}
+
+		if _, err := os.Stat(unixSocketPath); err != nil {
+			log.Fatalf("unix socket stat '%s' err: '%s'", unixSocketPath, err)
+		}
+
+		c, err := net.Dial("unix", unixSocketPath)
+		if err != nil {
+			log.Fatalf("unix socket connect '%s' err: '%s'", unixSocketPath, err)
+		}
+		c.Close()
+	}
+
+	if err := UnveilBlock(); err != nil {
+		log.Fatalf("unveil block err: %s", err)
+	}
+
+	log.Println("reading line scanner")
 	scanner := bufio.NewScanner(os.Stdin)
 
+	log.Println("reading lines until ready")
 	skipConfig(scanner)
 
+	log.Println("responding desired filters")
 	filterInit()
 
 	outputChannel = make(chan string)
@@ -601,15 +640,18 @@ func main() {
 		}
 	}()
 
+	atom_len := 6
+
 	for {
 		if !scanner.Scan() {
+			log.Print("no more lines to scan. exiting...")
 			os.Exit(0)
 		}
 
 		line := scanner.Text()
 		atoms := strings.Split(line, "|")
-		if len(atoms) < 6 {
-			log.Fatalf("missing atoms: %s", line)
+		if len(atoms) < atom_len {
+			log.Fatalf("missing atoms. expected %d. got %d: %s", atom_len, len(atoms), line)
 		}
 
 		version = atoms[1]
