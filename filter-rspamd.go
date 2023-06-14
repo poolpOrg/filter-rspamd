@@ -129,14 +129,24 @@ func linkIdentify(s *session, params []string) {
 }
 
 func linkAuth(s *session, params []string) {
-	if len(params) != 2 {
+	if len(params) < 2 {
 		log.Fatal("invalid input, shouldn't happen")
 	}
-	if params[1] != "pass" {
+
+	var user, res string
+	if version < "0.7" {
+		res = params[len(params) - 1]
+		user = strings.Join(params[0:len(params)-1], "|")
+	} else {
+		res = params[0]
+		user = strings.Join(params[1:], "|")
+	}
+
+	if res != "pass" {
 		return
 	}
 
-	s.userName = params[0]
+	s.userName = user
 }
 
 func txReset(s *session, params []string) {
