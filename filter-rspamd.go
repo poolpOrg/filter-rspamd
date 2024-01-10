@@ -135,7 +135,7 @@ func linkAuth(s *session, params []string) {
 
 	var user, res string
 	if version < "0.7" {
-		res = params[len(params) - 1]
+		res = params[len(params)-1]
 		user = strings.Join(params[0:len(params)-1], "|")
 	} else {
 		res = params[0]
@@ -515,7 +515,8 @@ func rspamdQuery(s *session, token string) {
 				"ARC-Seal",
 				"ARC-Message-Signature",
 				"ARC-Authentication-Results",
-				"Authentication-Results"}
+				"Authentication-Results",
+			}
 
 			for _, h := range hdrs {
 				if authHeaders[h] != "" {
