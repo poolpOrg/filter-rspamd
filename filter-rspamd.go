@@ -147,7 +147,6 @@ func dataLine(timestamp time.Time, sessionId string, line string) []string {
 
 	// Input is raw SMTP data - unescape leading dots.
 	line = strings.TrimPrefix(line, ".")
-
 	s := sessions[sessionId]
 	s.tx.message = append(s.tx.message, line)
 	return []string{}
@@ -183,24 +182,16 @@ func flushMessage(s *session) []string {
 	return append(s.tx.message, ".")
 }
 
-func writeLine(s *session, line string) string {
-	prefix := ""
-	// Output raw SMTP data - escape leading dots.
-	if strings.HasPrefix(line, ".") {
-		prefix = "."
-	}
-	return prefix + line
-}
-
-func writeHeader(s *session, h string, t string) string {
+func writeHeader(h string, t string) []string {
+	ret := make([]string, 0)
 	for i, line := range strings.Split(t, "\n") {
 		if i == 0 {
-			return fmt.Sprintf("%s: %s", h, line)
+			ret = append(ret, fmt.Sprintf("%s: %s", h, line))
 		} else {
-			return fmt.Sprintf("%s", line)
+			ret = append(ret, fmt.Sprintf("%s", line))
 		}
 	}
-	return ""
+	return ret
 }
 
 func rspamdTempFail(s *session, log string) []string {
@@ -298,13 +289,13 @@ func rspamdQuery(s *session) []string {
 			for _, h := range v {
 				h, ok := h.(string)
 				if ok && h != "" {
-					ret = append(ret, writeHeader(s, "DKIM-Signature", h))
+					ret = append(ret, writeHeader("DKIM-Signature", h)...)
 				}
 			}
 		}
 	case string:
 		if v != "" {
-			ret = append(ret, writeHeader(s, "DKIM-Signature", v))
+			ret = append(ret, writeHeader("DKIM-Signature", v)...)
 		}
 	default:
 	}
@@ -371,7 +362,7 @@ func rspamdQuery(s *session) []string {
 			 * Insert these at the top.
 			 */
 			case string:
-				ret = append(ret, writeHeader(s, h, v))
+				ret = append(ret, writeHeader(h, v)...)
 			default:
 			}
 		}
@@ -388,7 +379,7 @@ func rspamdQuery(s *session) []string {
 
 			for _, h := range hdrs {
 				if authHeaders[h] != "" {
-					ret = append(ret, writeHeader(s, h, authHeaders[h]))
+					ret = append(ret, writeHeader(h, authHeaders[h])...)
 				}
 			}
 		}
@@ -423,7 +414,11 @@ LOOP:
 		if rr.Action == "rewrite subject" && inhdr && strings.HasPrefix(line, "Subject: ") {
 			ret = append(ret, fmt.Sprintf("Subject: %s", rr.Subject))
 		} else {
-			ret = append(ret, writeLine(s, line))
+			escapePrefix := ""
+			if strings.HasPrefix(line, ".") {
+				escapePrefix = "."
+			}
+			ret = append(ret, escapePrefix+line)
 		}
 	}
 	return append(ret, ".")
