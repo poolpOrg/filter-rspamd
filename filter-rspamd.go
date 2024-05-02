@@ -17,18 +17,20 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"encoding/json"
 	"log"
 	"net"
 	"net/http"
+
+	"github.com/poolpOrg/OpenSMTPD-framework/filter"
 )
 
 var rspamdURL *string
@@ -51,7 +53,7 @@ type session struct {
 	id string
 
 	rdns     string
-	src      string
+	src      net.Addr
 	heloName string
 	userName string
 	mtaName  string
@@ -79,252 +81,139 @@ type rspamd struct {
 
 var sessions = make(map[string]*session)
 
-var reporters = map[string]func(*session, []string){
-	"link-connect":    linkConnect,
-	"link-disconnect": linkDisconnect,
-	"link-greeting":   linkGreeting,
-	"link-identify":   linkIdentify,
-	"link-auth":       linkAuth,
-	"tx-reset":        txReset,
-	"tx-begin":        txBegin,
-	"tx-mail":         txMail,
-	"tx-rcpt":         txRcpt,
+func linkConnectCb(timestamp time.Time, sessionId string, rdns string, fcrdns string, src net.Addr, dest net.Addr) {
+	s := &session{}
+	s.id = sessionId
+	sessions[s.id] = s
+
+	s.rdns = rdns
+	s.src = src
 }
 
-var filters = map[string]func(*session, []string){
-	"data-line": dataLine,
-	"commit":    dataCommit,
+func linkDisconnectCb(timestamp time.Time, sessionId string) {
+	delete(sessions, sessionId)
 }
 
-func linkConnect(s *session, params []string) {
-	if len(params) != 4 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-
-	s.rdns = params[0]
-	s.src = params[2]
+func linkGreetingCb(timestamp time.Time, sessionId string, hostname string) {
+	s := sessions[sessionId]
+	s.mtaName = hostname
 }
 
-func linkDisconnect(s *session, params []string) {
-	if len(params) != 0 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-	delete(sessions, s.id)
+func linkIdentifyCb(timestamp time.Time, sessionId string, method string, hostname string) {
+	s := sessions[sessionId]
+	s.heloName = hostname
 }
 
-func linkGreeting(s *session, params []string) {
-	if len(params) != 1 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-
-	s.mtaName = params[0]
-}
-
-func linkIdentify(s *session, params []string) {
-	if len(params) != 2 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-
-	s.heloName = params[1]
-}
-
-func linkAuth(s *session, params []string) {
-	if len(params) < 2 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-
-	var user, res string
-	if version < "0.7" {
-		res = params[len(params) - 1]
-		user = strings.Join(params[0:len(params)-1], "|")
-	} else {
-		res = params[0]
-		user = strings.Join(params[1:], "|")
-	}
-
-	if res != "pass" {
+func linkAuthCb(timestamp time.Time, sessionId string, result string, username string) {
+	if result != "pass" {
 		return
 	}
-
-	s.userName = user
+	s := sessions[sessionId]
+	s.userName = username
 }
 
-func txReset(s *session, params []string) {
-	if len(params) != 1 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-
+func txResetCb(timestamp time.Time, sessionId string, messageId string) {
+	s := sessions[sessionId]
 	s.tx = tx{}
 }
 
-func txBegin(s *session, params []string) {
-	if len(params) != 1 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-
-	s.tx.msgid = params[0]
+func txBeginCb(timestamp time.Time, sessionId string, messageId string) {
+	s := sessions[sessionId]
+	s.tx.msgid = messageId
 }
 
-func txMail(s *session, params []string) {
-	if len(params) < 3 {
-		log.Fatal("invalid input, shouldn't happen")
+func txMailCb(timestamp time.Time, sessionId string, messageId string, result string, from string) {
+	if result != "ok" {
+		return
 	}
+	s := sessions[sessionId]
+	s.tx.mailFrom = from
+}
 
-	var status string
-	var mailaddr string
-
-	if version < "0.6" {
-		_ = params[0]
-		mailaddr = strings.Join(params[1:len(params)-1], "|")
-		status = params[len(params)-1]
-	} else {
-		_ = params[0]
-		status = params[1]
-		mailaddr = strings.Join(params[2:], "|")
-	}
-
-	if status != "ok" {
+func txRcptCb(timestamp time.Time, sessionId string, messageId string, result string, to string) {
+	if result != "ok" {
 		return
 	}
 
-	s.tx.mailFrom = mailaddr
+	s := sessions[sessionId]
+	s.tx.rcptTo = append(s.tx.rcptTo, to)
 }
 
-func txRcpt(s *session, params []string) {
-	if len(params) < 3 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-
-	var status string
-	var mailaddr string
-
-	if version < "0.6" {
-		_ = params[0]
-		mailaddr = strings.Join(params[1:len(params)-1], "|")
-		status = params[len(params)-1]
-	} else {
-		_ = params[0]
-		status = params[1]
-		mailaddr = strings.Join(params[2:], "|")
-	}
-
-	if status != "ok" {
-		return
-	}
-
-	s.tx.rcptTo = append(s.tx.rcptTo, mailaddr)
-}
-
-func dataLine(s *session, params []string) {
-	if len(params) < 2 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-
-	token := params[0]
-	line := strings.Join(params[1:], "|")
-
+func dataLine(timestamp time.Time, sessionId string, line string) []string {
 	if line == "." {
-		go rspamdQuery(s, token)
-		return
+		s := sessions[sessionId]
+		return rspamdQuery(s)
 	}
 
 	// Input is raw SMTP data - unescape leading dots.
 	line = strings.TrimPrefix(line, ".")
 
+	s := sessions[sessionId]
 	s.tx.message = append(s.tx.message, line)
+	return []string{}
 }
 
-func produceOutput(msgType string, sessionId string, token string, format string, a ...interface{}) {
-	var out string
-
-	if version < "0.5" {
-		out = msgType + "|" + token + "|" + sessionId
-	} else {
-		out = msgType + "|" + sessionId + "|" + token
-	}
-	out += "|" + fmt.Sprintf(format, a...)
-
-	outputChannel <- out
-}
-
-func dataCommit(s *session, params []string) {
-	if len(params) != 2 {
-		log.Fatal("invalid input, shouldn't happen")
-	}
-
-	token := params[0]
-
+func dataCommit(timestamp time.Time, sessionId string) filter.Response {
+	s := sessions[sessionId]
 	switch s.tx.action {
 	case "tempfail":
 		if s.tx.response == "" {
 			s.tx.response = "server internal error"
 		}
-		produceOutput("filter-result", s.id, token, "reject|421 %s", s.tx.response)
+		return filter.Reject("421 " + s.tx.response)
 
 	case "reject":
 		if s.tx.response == "" {
 			s.tx.response = "message rejected"
 		}
-		produceOutput("filter-result", s.id, token, "reject|550 %s", s.tx.response)
+		return filter.Reject("550 " + s.tx.response)
 
 	case "soft reject":
 		if s.tx.response == "" {
 			s.tx.response = "try again later"
 		}
-		produceOutput("filter-result", s.id, token, "reject|451 %s", s.tx.response)
+		return filter.Reject("451 " + s.tx.response)
 
 	default:
-		produceOutput("filter-result", s.id, token, "proceed")
+		return filter.Proceed()
 	}
 }
 
-func filterInit() {
-	for k := range reporters {
-		fmt.Printf("register|report|smtp-in|%s\n", k)
-	}
-	for k := range filters {
-		fmt.Printf("register|filter|smtp-in|%s\n", k)
-	}
-	fmt.Println("register|ready")
+func flushMessage(s *session) []string {
+	return append(s.tx.message, ".")
 }
 
-func flushMessage(s *session, token string) {
-	for _, line := range s.tx.message {
-		writeLine(s, token, line)
-	}
-	produceOutput("filter-dataline", s.id, token, ".")
-}
-
-func writeLine(s *session, token string, line string) {
+func writeLine(s *session, line string) string {
 	prefix := ""
 	// Output raw SMTP data - escape leading dots.
 	if strings.HasPrefix(line, ".") {
 		prefix = "."
 	}
-	produceOutput("filter-dataline", s.id, token,
-		"%s%s", prefix, line)
+	return prefix + line
 }
 
-func writeHeader(s *session, token string, h string, t string) {
+func writeHeader(s *session, h string, t string) string {
 	for i, line := range strings.Split(t, "\n") {
 		if i == 0 {
-			produceOutput("filter-dataline", s.id, token,
-				"%s: %s", h, line)
+			return fmt.Sprintf("%s: %s", h, line)
 		} else {
-			produceOutput("filter-dataline", s.id, token,
-				"%s", line)
+			return fmt.Sprintf("%s", line)
 		}
 	}
+	return ""
 }
 
-func rspamdTempFail(s *session, token string, log string) {
+func rspamdTempFail(s *session, log string) []string {
 	s.tx.action = "tempfail"
 	s.tx.response = "server internal error"
-	flushMessage(s, token)
 	fmt.Fprintln(os.Stderr, log)
+	return flushMessage(s)
 }
 
-func rspamdQuery(s *session, token string) {
+func rspamdQuery(s *session) []string {
+
+	ret := make([]string, 0)
+
 	var client *http.Client
 	var req *http.Request
 
@@ -340,7 +229,7 @@ func rspamdQuery(s *session, token string) {
 			network := "unix"
 			u_addr, err = net.ResolveUnixAddr(network, unixSocketPath)
 			if err != nil {
-				rspamdTempFail(s, token, fmt.Sprintf("failed to resolve unix path '%s': %v\n", unixSocketPath, err))
+				rspamdTempFail(s, fmt.Sprintf("failed to resolve unix path '%s': %v\n", unixSocketPath, err))
 				return nil, err
 			} else {
 				return net.DialUnix(network, nil, u_addr)
@@ -353,19 +242,13 @@ func rspamdQuery(s *session, token string) {
 	var err error
 	req, err = http.NewRequest("POST", fmt.Sprintf("%s/checkv2", *rspamdURL), r)
 	if err != nil {
-		rspamdTempFail(s, token, fmt.Sprintf("failed to initialize HTTP request. err: '%s'", err))
-		return
+		return rspamdTempFail(s, fmt.Sprintf("failed to initialize HTTP request. err: '%s'", err))
 	}
 
 	req.Header.Add("Pass", "All")
-	if !strings.HasPrefix(s.src, "unix:") {
-		if s.src[0] == '[' {
-			ip := strings.Split(strings.Split(s.src, "]")[0], "[")[1]
-			req.Header.Add("Ip", ip)
-		} else {
-			ip := strings.Split(s.src, ":")[0]
-			req.Header.Add("Ip", ip)
-		}
+
+	if addr, ok := s.src.(*net.TCPAddr); ok {
+		req.Header.Add("Ip", addr.IP.String())
 	} else {
 		req.Header.Add("Ip", "127.0.0.1")
 	}
@@ -390,16 +273,14 @@ func rspamdQuery(s *session, token string) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		rspamdTempFail(s, token, fmt.Sprintf("failed to receive a response from daemon. err: '%s'", err))
-		return
+		return rspamdTempFail(s, fmt.Sprintf("failed to receive a response from daemon. err: '%s'", err))
 	}
 
 	defer resp.Body.Close()
 
 	rr := &rspamd{}
 	if err := json.NewDecoder(resp.Body).Decode(rr); err != nil {
-		rspamdTempFail(s, token, fmt.Sprintf("failed to decode JSON response, err: '%s'", err))
-		return
+		return rspamdTempFail(s, fmt.Sprintf("failed to decode JSON response, err: '%s'", err))
 	}
 
 	switch rr.Action {
@@ -408,8 +289,7 @@ func rspamdQuery(s *session, token string) {
 	case "soft reject":
 		s.tx.action = rr.Action
 		s.tx.response = rr.Messages.SMTP
-		flushMessage(s, token)
-		return
+		return flushMessage(s)
 	}
 
 	switch v := rr.DKIMSig.(type) {
@@ -418,34 +298,26 @@ func rspamdQuery(s *session, token string) {
 			for _, h := range v {
 				h, ok := h.(string)
 				if ok && h != "" {
-					writeHeader(s, token, "DKIM-Signature", h)
+					ret = append(ret, writeHeader(s, "DKIM-Signature", h))
 				}
 			}
 		}
 	case string:
 		if v != "" {
-			writeHeader(s, token, "DKIM-Signature", v)
+			ret = append(ret, writeHeader(s, "DKIM-Signature", v))
 		}
 	default:
 	}
 
 	if rr.Action == "add header" {
-		produceOutput("filter-dataline", s.id, token,
-			"%s: %s", "X-Spam", "yes")
-		produceOutput("filter-dataline", s.id, token,
-			"%s: %v / %v", "X-Spam-Score",
-			rr.Score, rr.RequiredScore)
-
+		ret = append(ret, fmt.Sprintf("X-Spam: %s", "yes"))
+		ret = append(ret, fmt.Sprintf("X-Spam-Score: %.3f / %.3f", rr.Score, rr.RequiredScore))
 		if len(rr.Symbols) != 0 {
 			symbols := make([]string, len(rr.Symbols))
 			buf := &strings.Builder{}
 			i := 0
 
-			produceOutput("filter-dataline", s.id, token,
-				"%s: %s, score=%.3f required=%.3f",
-				"X-Spam-Status", "Yes", rr.Score,
-				rr.RequiredScore)
-
+			ret = append(ret, fmt.Sprintf("X-Spam-Status: Yes, score=%.3f required=%.3f", rr.Score, rr.RequiredScore))
 			for k := range rr.Symbols {
 				symbols[i] = k
 				i++
@@ -459,8 +331,7 @@ func rspamdQuery(s *session, token string) {
 				sym := fmt.Sprintf("%s=%.3f", k, rr.Symbols[k].Score)
 
 				if buf.Len() > 0 && len(sym)+buf.Len() > 68 {
-					produceOutput("filter-dataline", s.id, token, "\t%s",
-						buf.String())
+					ret = append(ret, fmt.Sprintf("\t%s", buf.String()))
 					buf.Reset()
 				}
 
@@ -471,9 +342,7 @@ func rspamdQuery(s *session, token string) {
 				buf.WriteString(sym)
 			}
 
-			produceOutput("filter-dataline", s.id, token, "\t%s]",
-				buf.String())
-
+			ret = append(ret, fmt.Sprintf("\t%s]", buf.String()))
 			buf.Reset()
 		}
 	}
@@ -502,7 +371,7 @@ func rspamdQuery(s *session, token string) {
 			 * Insert these at the top.
 			 */
 			case string:
-				writeHeader(s, token, h, v)
+				ret = append(ret, writeHeader(s, h, v))
 			default:
 			}
 		}
@@ -519,7 +388,7 @@ func rspamdQuery(s *session, token string) {
 
 			for _, h := range hdrs {
 				if authHeaders[h] != "" {
-					writeHeader(s, token, h, authHeaders[h])
+					ret = append(ret, writeHeader(s, h, authHeaders[h]))
 				}
 			}
 		}
@@ -552,45 +421,12 @@ LOOP:
 			}
 		}
 		if rr.Action == "rewrite subject" && inhdr && strings.HasPrefix(line, "Subject: ") {
-			produceOutput("filter-dataline", s.id, token, "Subject: %s", rr.Subject)
+			ret = append(ret, fmt.Sprintf("Subject: %s", rr.Subject))
 		} else {
-			writeLine(s, token, line)
+			ret = append(ret, writeLine(s, line))
 		}
 	}
-	produceOutput("filter-dataline", s.id, token, ".")
-}
-
-func trigger(actions map[string]func(*session, []string), atoms []string) {
-	if atoms[4] == "link-connect" {
-		// special case to simplify subsequent code
-		s := session{}
-		s.id = atoms[5]
-		sessions[s.id] = &s
-	}
-
-	s, ok := sessions[atoms[5]]
-	if !ok {
-		log.Fatalf("invalid session ID: %s", atoms[5])
-	}
-
-	if v, ok := actions[atoms[4]]; ok {
-		v(s, atoms[6:])
-	} else {
-		log.Fatalf("invalid phase: %s", atoms[4])
-	}
-}
-
-func skipConfig(scanner *bufio.Scanner) {
-	for {
-		if !scanner.Scan() {
-			log.Print("no more lines to scan for skipping. exiting...")
-			os.Exit(0)
-		}
-		line := scanner.Text()
-		if line == "config|ready" {
-			return
-		}
-	}
+	return append(ret, ".")
 }
 
 func main() {
@@ -634,45 +470,20 @@ func main() {
 		log.Fatalf("unveil block err: %s", err)
 	}
 
-	log.Println("reading line scanner")
-	scanner := bufio.NewScanner(os.Stdin)
+	filter.Init()
 
-	log.Println("reading lines until ready")
-	skipConfig(scanner)
+	filter.SMTP_IN.OnLinkConnect(linkConnectCb)
+	filter.SMTP_IN.OnLinkDisconnect(linkDisconnectCb)
+	filter.SMTP_IN.OnLinkGreeting(linkGreetingCb)
+	filter.SMTP_IN.OnLinkIdentify(linkIdentifyCb)
+	filter.SMTP_IN.OnLinkAuth(linkAuthCb)
+	filter.SMTP_IN.OnTxReset(txResetCb)
+	filter.SMTP_IN.OnTxBegin(txBeginCb)
+	filter.SMTP_IN.OnTxMail(txMailCb)
+	filter.SMTP_IN.OnTxRcpt(txRcptCb)
 
-	log.Println("responding desired filters")
-	filterInit()
+	filter.SMTP_IN.DataLineRequest(dataLine)
+	filter.SMTP_IN.CommitRequest(dataCommit)
 
-	outputChannel = make(chan string)
-	go func() {
-		for line := range outputChannel {
-			fmt.Println(line)
-		}
-	}()
-
-	atom_len := 6
-
-	for {
-		if !scanner.Scan() {
-			log.Print("no more lines to scan. exiting...")
-			os.Exit(0)
-		}
-
-		line := scanner.Text()
-		atoms := strings.Split(line, "|")
-		if len(atoms) < atom_len {
-			log.Fatalf("missing atoms. expected %d. got %d: %s", atom_len, len(atoms), line)
-		}
-
-		version = atoms[1]
-
-		switch atoms[0] {
-		case "report":
-			trigger(reporters, atoms)
-		case "filter":
-			trigger(filters, atoms)
-		default:
-			log.Fatalf("invalid stream: %s", atoms[0])
-		}
-	}
+	filter.Dispatch()
 }
