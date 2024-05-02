@@ -188,7 +188,7 @@ func writeHeader(h string, t string) []string {
 		if i == 0 {
 			ret = append(ret, fmt.Sprintf("%s: %s", h, line))
 		} else {
-			ret = append(ret, fmt.Sprintf("%s", line))
+			ret = append(ret, line)
 		}
 	}
 	return ret
